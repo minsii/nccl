@@ -72,10 +72,10 @@ $(OBJDIR)/onerank_reduce.o : onerank_reduce.cu $(OBJDIR)/onerank_reduce.dep
 	mkdir -p `dirname $@`
 	$(NVCC) $(NVCUFLAGS) -dc $< -o $@
 
-$(OBJDIR)/all_reduce_sparse_block.o : all_reduce_sparse_block.cu $(OBJDIR)/all_reduce_sparse_block.dep
-       @printf "Compiling  %-35s > %s\n" $< $@
-       mkdir -p `dirname $@`
-       $(NVCC) $(NVCUFLAGS) -dc $< -o $@
+$(OBJDIR)/%.o : %.cu $(OBJDIR)/%.dep
+	@printf "Compiling  %-35s > %s\n" $< $@
+	mkdir -p `dirname $@`
+	$(NVCC) $(NVCUFLAGS) -dc $< -o $@
 
 # ... and create the device-side linked object with all those.
 $(DEVOBJ) : $(LIBOBJ)
