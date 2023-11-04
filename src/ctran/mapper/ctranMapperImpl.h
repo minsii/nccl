@@ -48,6 +48,9 @@ public:
   uint32_t totalNumDynamicRegistrations; /* total number of buffers at lifetime that were not pre-registered by user but temporarily in communication */
   uint32_t totalNumRegistrations; /* total number of registered buffers at lifetime */
   uint32_t totalNumCachedRegistrations; /* total number of cached buffers at lifetime */
+  uint32_t totalNumRegLookupHit; /* total number of lookup calls to search buffer registration and found registered handle */
+  uint32_t totalNumRegLookupMiss; /* total number of lookup calls to search buffer registration and could
+                                   * not found registered handle (i.e., by either lazy registration or dynamic registration )*/
 };
 
 #endif
