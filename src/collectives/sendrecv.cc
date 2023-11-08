@@ -13,7 +13,7 @@
 /*
 === BEGIN_NCCL_CVAR_INFO_BLOCK ===
 
- - name        : NCCL_CVAR_SENDRECV_ALGO
+ - name        : NCCL_SENDRECV_ALGO
    type        : enum
    default     : orig
    choices     : orig, ctran
@@ -39,7 +39,7 @@ NCCL_API(ncclResult_t, ncclSend, const void* sendbuff, size_t count, ncclDataTyp
 ncclResult_t ncclSend(const void* sendbuff, size_t count, ncclDataType_t datatype, int peer,
     ncclComm_t comm, cudaStream_t stream) {
   if (comm->ctranMapper != nullptr) {
-    if (NCCL_CVAR_SENDRECV_ALGO == NCCL_CVAR_SENDRECV_ALGO::ctran) {
+    if (NCCL_SENDRECV_ALGO == NCCL_SENDRECV_ALGO::ctran) {
       return ctranSend(sendbuff, count, datatype, peer, comm, stream);
     }
   }
@@ -62,7 +62,7 @@ NCCL_API(ncclResult_t, ncclRecv, void* recvbuff, size_t count, ncclDataType_t da
 ncclResult_t ncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, int peer,
     ncclComm_t comm, cudaStream_t stream) {
   if (comm->ctranMapper != nullptr) {
-    if (NCCL_CVAR_SENDRECV_ALGO == NCCL_CVAR_SENDRECV_ALGO::ctran) {
+    if (NCCL_SENDRECV_ALGO == NCCL_SENDRECV_ALGO::ctran) {
       return ctranRecv(recvbuff, count, datatype, peer, comm, stream);
     }
   }

@@ -7,7 +7,7 @@
 /*
 === BEGIN_NCCL_CVAR_INFO_BLOCK ===
 
- - name        : NCCL_CVAR_DDA_FORCE_P2P_ACCESS
+ - name        : NCCL_DDA_FORCE_P2P_ACCESS
    type        : bool
    default     : false
    description : |-
@@ -45,7 +45,7 @@ static ncclResult_t topoDetect(
     for (int j = 0; j < nGPUs; j++) {
       if (i == j) {
         perfRankMatrix[i][j] = 0;
-      } else if (NCCL_CVAR_DDA_FORCE_P2P_ACCESS) {
+      } else if (NCCL_DDA_FORCE_P2P_ACCESS) {
         perfRankMatrix[i][j] = 0;
       } else {
         int val;
@@ -191,7 +191,7 @@ ddaPrivateMd::ddaPrivateMd(ddaThreadSharedMd *threadSharedMd, ncclComm *comm) {
 
   this->threadSharedMd = threadSharedMd;
   CUDACHECKIGNORE(cudaHostAlloc(&this->commMdHost, this->comm->nRanks * sizeof(commMd), cudaHostAllocDefault));
-  CUDACHECKIGNORE(cudaMalloc(&this->commMdHost[this->comm->rank].tmpbuff, NCCL_CVAR_DDA_ALLREDUCE_TMPBUFF_SIZE));
+  CUDACHECKIGNORE(cudaMalloc(&this->commMdHost[this->comm->rank].tmpbuff, NCCL_DDA_ALLREDUCE_TMPBUFF_SIZE));
   CUDACHECKIGNORE(cudaMalloc(&this->commMdDev, sizeof(commMd) * this->comm->nRanks));
 
   int *cudaDevPtr;
