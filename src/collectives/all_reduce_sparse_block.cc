@@ -12,7 +12,7 @@
 /*
 === BEGIN_NCCL_CVAR_INFO_BLOCK ===
 
- - name        : NCCL_CVAR_ALLREDUCE_SPARSE_BLOCK_NUM_THREAD_BLOCKS
+ - name        : NCCL_ALLREDUCE_SPARSE_BLOCK_NUM_THREAD_BLOCKS
    type        : int
    default     : -1
    description : |-
@@ -20,7 +20,7 @@
      Setting it to a negative number means that NCCL will automatically
      pick a value.
 
- - name        : NCCL_CVAR_ALLREDUCE_SPARSE_BLOCK_THREAD_BLOCK_SIZE
+ - name        : NCCL_ALLREDUCE_SPARSE_BLOCK_THREAD_BLOCK_SIZE
    type        : int
    default     : -1
    description : |-
@@ -70,10 +70,10 @@ static inline ncclResult_t unpackSendBlocks(
   // Allow user to customize if specified
   unsigned int num_blocks_x = unpackMinGridSize,
                num_threads_x = unpackBlockSize;
-  if (NCCL_CVAR_ALLREDUCE_SPARSE_BLOCK_NUM_THREAD_BLOCKS > 0)
-    num_blocks_x = NCCL_CVAR_ALLREDUCE_SPARSE_BLOCK_NUM_THREAD_BLOCKS;
-  if (NCCL_CVAR_ALLREDUCE_SPARSE_BLOCK_THREAD_BLOCK_SIZE > 0)
-    num_threads_x = NCCL_CVAR_ALLREDUCE_SPARSE_BLOCK_THREAD_BLOCK_SIZE;
+  if (NCCL_ALLREDUCE_SPARSE_BLOCK_NUM_THREAD_BLOCKS > 0)
+    num_blocks_x = NCCL_ALLREDUCE_SPARSE_BLOCK_NUM_THREAD_BLOCKS;
+  if (NCCL_ALLREDUCE_SPARSE_BLOCK_THREAD_BLOCK_SIZE > 0)
+    num_threads_x = NCCL_ALLREDUCE_SPARSE_BLOCK_THREAD_BLOCK_SIZE;
 
   INFO(
       NCCL_COLL,

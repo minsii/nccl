@@ -12,13 +12,13 @@
 /*
 === BEGIN_NCCL_CVAR_INFO_BLOCK ===
 
- - name        : NCCL_CVAR_ALLGATHER_DIRECT_CUTOFF
+ - name        : NCCL_ALLGATHER_DIRECT_CUTOFF
    type        : int
    default     : 0
    description : |-
      Message size up to which we use the direct algorithm for Allgather.
 
- - name        : NCCL_CVAR_ALLGATHER_ALGO
+ - name        : NCCL_ALLGATHER_ALGO
    type        : enum
    default     : orig
    choices     : orig, ctdirect, ctring, ctrd
@@ -29,7 +29,7 @@
      ctring - Ctran-based ring algorithm
      ctrd - Ctran-based recursive-doubling algorithm
 
- - name        : NCCL_CVAR_CTRAN_ENABLE_LOCAL_IB
+ - name        : NCCL_CTRAN_ENABLE_LOCAL_IB
    type        : bool
    default     : false
    description : |-
@@ -50,18 +50,18 @@ ncclResult_t ncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcoun
     ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream) {
   int nRanks = comm->nRanks;
   size_t rankOffset = sendcount * ncclTypeSize(datatype);
-  bool directSend = (comm->localRanks == 1) && (rankOffset <= NCCL_CVAR_ALLGATHER_DIRECT_CUTOFF);
-  bool enableCtran = (NCCL_CVAR_CTRAN_ENABLE_LOCAL_IB || comm->localRanks == 1) ? true : false;
+  bool directSend = (comm->localRanks == 1) && (rankOffset <= NCCL_ALLGATHER_DIRECT_CUTOFF);
+  bool enableCtran = (NCCL_CTRAN_ENABLE_LOCAL_IB || comm->localRanks == 1) ? true : false;
 
   // only use CTRAN for inter-node only allgather
   if (comm->ctranMapper != nullptr && enableCtran && nRanks > 1 && rankOffset > getpagesize()) {
-    if (NCCL_CVAR_ALLGATHER_ALGO == NCCL_CVAR_ALLGATHER_ALGO::ctdirect) {
+    if (NCCL_ALLGATHER_ALGO == NCCL_ALLGATHER_ALGO::ctdirect) {
       LOG_COLL_INFO("ctranAllGatherDirect", sendbuff, recvbuff, sendcount, datatype, comm, stream);
       return ctranAllGatherDirect(sendbuff, recvbuff, sendcount, datatype, comm, stream);
-    } else if (NCCL_CVAR_ALLGATHER_ALGO == NCCL_CVAR_ALLGATHER_ALGO::ctring) {
+    } else if (NCCL_ALLGATHER_ALGO == NCCL_ALLGATHER_ALGO::ctring) {
       LOG_COLL_INFO("ctranAllGatherRing", sendbuff, recvbuff, sendcount, datatype, comm, stream);
       return ctranAllGatherRing(sendbuff, recvbuff, sendcount, datatype, comm, stream);
-    } else if (NCCL_CVAR_ALLGATHER_ALGO == NCCL_CVAR_ALLGATHER_ALGO::ctrd) {
+    } else if (NCCL_ALLGATHER_ALGO == NCCL_ALLGATHER_ALGO::ctrd) {
       LOG_COLL_INFO("ctranAllGatherRd", sendbuff, recvbuff, sendcount, datatype, comm, stream);
       return ctranAllGatherRd(sendbuff, recvbuff, sendcount, datatype, comm, stream);
     }

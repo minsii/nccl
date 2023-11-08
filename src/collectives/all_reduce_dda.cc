@@ -10,20 +10,20 @@
 /*
 === BEGIN_NCCL_CVAR_INFO_BLOCK ===
 
- - name        : NCCL_CVAR_DDA_ALLREDUCE_MAX_BLOCKS
+ - name        : NCCL_DDA_ALLREDUCE_MAX_BLOCKS
    type        : int
    default     : 1
    description : |-
      Number of CUDA blocks to use for DDA Allreduce.
 
- - name        : NCCL_CVAR_DDA_ALLREDUCE_TREE_THRESHOLD_NVS
+ - name        : NCCL_DDA_ALLREDUCE_TREE_THRESHOLD_NVS
    type        : int
    default     : 262144
    description : |-
      Message size at which DDA Allreduce switches to the tree algorithm.
      Only applies for NVSwitch-based systems.
 
- - name        : NCCL_CVAR_DDA_ALLREDUCE_TREE_THRESHOLD_HCM
+ - name        : NCCL_DDA_ALLREDUCE_TREE_THRESHOLD_HCM
    type        : int
    default     : 65536
    description : |-
@@ -58,7 +58,7 @@
   } while (0)
 
 static inline int getMaxBlocks(ncclComm* comm) {
-  int maxBlocks = NCCL_CVAR_DDA_ALLREDUCE_MAX_BLOCKS;
+  int maxBlocks = NCCL_DDA_ALLREDUCE_MAX_BLOCKS;
 
   if (maxBlocks > comm->dda->devProp.multiProcessorCount) {
     WARN("NCCL_DDA_ALLREDUCE_MAX_BLOCKS cannot be larger than %d\n",
@@ -81,7 +81,7 @@ static ncclResult_t launchKernel(
   const void* func;
 
   if (comm->dda->topoType == NCCL_DDA_TOPO_TYPE__NVS) {
-    if (count * sizeof(T) < NCCL_CVAR_DDA_ALLREDUCE_TREE_THRESHOLD_NVS) {
+    if (count * sizeof(T) < NCCL_DDA_ALLREDUCE_TREE_THRESHOLD_NVS) {
       if (algo == NCCL_DDA_ALLREDUCE_ALGO_DDA_IPC) {
         ASSIGN_FUNC(func, ncclKernel_AllReduce_DDA_Flat_ipc, comm->nRanks);
       } else {
@@ -95,7 +95,7 @@ static ncclResult_t launchKernel(
       }
     }
   } else if (comm->dda->topoType == NCCL_DDA_TOPO_TYPE__HCM) {
-    if (count * sizeof(T) < NCCL_CVAR_DDA_ALLREDUCE_TREE_THRESHOLD_HCM) {
+    if (count * sizeof(T) < NCCL_DDA_ALLREDUCE_TREE_THRESHOLD_HCM) {
       if (algo == NCCL_DDA_ALLREDUCE_ALGO_DDA_IPC) {
         ASSIGN_FUNC(func, ncclKernel_AllReduce_DDA_HCM_Flat_ipc, comm->nRanks);
       } else {

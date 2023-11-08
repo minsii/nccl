@@ -20,7 +20,7 @@
    default     :
    description : |-
      List of IB HCAs available for NCCL to use.
-     (this needs to be renamed to NCCL_CVAR_IB_HCA_LIST eventually)
+     (this needs to be renamed to NCCL_IB_HCA_LIST eventually)
 
 === END_NCCL_CVAR_INFO_BLOCK ===
 */

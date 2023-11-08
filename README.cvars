@@ -4,26 +4,26 @@ Automatically generated
   by ./maint/extractcvars.py
 DO NOT EDIT!!!
 
-NCCL_CVAR_DDA_ALLREDUCE_LARGE_MESSAGE_HCM
+NCCL_DDA_ALLREDUCE_LARGE_MESSAGE_HCM
 Description:
     Enable DDA Allreduce for large messages on HCM platforms.
 Type: bool
 Default: False
 
-NCCL_CVAR_DDA_ALLREDUCE_TMPBUFF_SIZE
+NCCL_DDA_ALLREDUCE_TMPBUFF_SIZE
 Description:
     DDA Allreduce temporary buffer size.
 Type: int
 Default: 33554432
 
-NCCL_CVAR_DDA_MAX_RANKS
+NCCL_DDA_MAX_RANKS
 Description:
     Message size at which DDA Allreduce switches to the tree algorithm.
     Only applies to HCM-based systems.
 Type: int
 Default: 16
 
-NCCL_CVAR_ALLREDUCE_ALGO
+NCCL_ALLREDUCE_ALGO
 Description:
     The algorithm to use for Allreduce communication
     orig - Copy-based algorithm
@@ -31,64 +31,13 @@ Description:
 Type: enum
 Default: orig
 
-NCCL_CVAR_DDA_ALLREDUCE_MAX_BLOCKS
-Description:
-    Number of CUDA blocks to use for DDA Allreduce.
-Type: int
-Default: 1
-
-NCCL_CVAR_DDA_ALLREDUCE_TREE_THRESHOLD_NVS
-Description:
-    Message size at which DDA Allreduce switches to the tree algorithm.
-    Only applies for NVSwitch-based systems.
-Type: int
-Default: 262144
-
-NCCL_CVAR_DDA_ALLREDUCE_TREE_THRESHOLD_HCM
-Description:
-    Message size at which DDA Allreduce switches to the tree algorithm.
-    Only applies for HCM-based systems.
-Type: int
-Default: 65536
-
-NCCL_CVAR_DDA_FORCE_P2P_ACCESS
-Description:
-    Force allow direct peer-to-peer access over NVLink, even for the
-    cases where there is no direct NVLink connectivity.
-Type: bool
-Default: False
-
-NCCL_CVAR_SENDRECV_ALGO
-Description:
-    The algorithm to use for sendrecv communication
-    orig - Copy-based communication
-    ctran - Ctran-based communication
-Type: enum
-Default: orig
-
-NCCL_CVAR_ALLREDUCE_SPARSE_BLOCK_NUM_THREAD_BLOCKS
-Description:
-    Number of thread blocks to use for Allreduce_sparse_block.
-    Setting it to a negative number means that NCCL will automatically
-    pick a value.
-Type: int
-Default: -1
-
-NCCL_CVAR_ALLREDUCE_SPARSE_BLOCK_THREAD_BLOCK_SIZE
-Description:
-    Number of threads in each thread block to use for Allreduce_sparse_block.
-    Setting it to a negative number means that NCCL will automatically
-    pick a value.
-Type: int
-Default: -1
-
-NCCL_CVAR_ALLGATHER_DIRECT_CUTOFF
+NCCL_ALLGATHER_DIRECT_CUTOFF
 Description:
     Message size up to which we use the direct algorithm for Allgather.
 Type: int
 Default: 0
 
-NCCL_CVAR_ALLGATHER_ALGO
+NCCL_ALLGATHER_ALGO
 Description:
     The algorithm to use for Allgather communication
     orig - Copy-based ring algorithm
@@ -98,7 +47,7 @@ Description:
 Type: enum
 Default: orig
 
-NCCL_CVAR_CTRAN_ENABLE_LOCAL_IB
+NCCL_CTRAN_ENABLE_LOCAL_IB
 Description:
     Disable using ctran/IB if there are multiple processes on the same node
     that need to communicate with each other.  This is a temporary variable
@@ -110,14 +59,65 @@ Description:
 Type: bool
 Default: False
 
+NCCL_DDA_ALLREDUCE_MAX_BLOCKS
+Description:
+    Number of CUDA blocks to use for DDA Allreduce.
+Type: int
+Default: 1
+
+NCCL_DDA_ALLREDUCE_TREE_THRESHOLD_NVS
+Description:
+    Message size at which DDA Allreduce switches to the tree algorithm.
+    Only applies for NVSwitch-based systems.
+Type: int
+Default: 262144
+
+NCCL_DDA_ALLREDUCE_TREE_THRESHOLD_HCM
+Description:
+    Message size at which DDA Allreduce switches to the tree algorithm.
+    Only applies for HCM-based systems.
+Type: int
+Default: 65536
+
+NCCL_ALLREDUCE_SPARSE_BLOCK_NUM_THREAD_BLOCKS
+Description:
+    Number of thread blocks to use for Allreduce_sparse_block.
+    Setting it to a negative number means that NCCL will automatically
+    pick a value.
+Type: int
+Default: -1
+
+NCCL_ALLREDUCE_SPARSE_BLOCK_THREAD_BLOCK_SIZE
+Description:
+    Number of threads in each thread block to use for Allreduce_sparse_block.
+    Setting it to a negative number means that NCCL will automatically
+    pick a value.
+Type: int
+Default: -1
+
+NCCL_DDA_FORCE_P2P_ACCESS
+Description:
+    Force allow direct peer-to-peer access over NVLink, even for the
+    cases where there is no direct NVLink connectivity.
+Type: bool
+Default: False
+
+NCCL_SENDRECV_ALGO
+Description:
+    The algorithm to use for sendrecv communication
+    orig - Copy-based communication
+    ctran - Ctran-based communication
+Type: enum
+Default: orig
+
 NCCL_IB_HCA
 Description:
     List of IB HCAs available for NCCL to use.
-    (this needs to be renamed to NCCL_CVAR_IB_HCA_LIST eventually)
+    (this needs to be renamed to NCCL_IB_HCA_LIST eventually)
 Type: stringlist
 Default: None
 
-NCCL_CVAR_CTRAN_IB_MAX_QPS
+NCCL_CTRAN_IB_MAX_QPS
 Description:
     Maximum number of QPs to enable, so data can be split across
     multiple QPs.  This allows the communication to take multiple routes
@@ -125,34 +125,34 @@ Description:
 Type: int
 Default: 1
 
-NCCL_CVAR_CTRAN_IB_QP_SCALING_THRESHOLD
+NCCL_CTRAN_IB_QP_SCALING_THRESHOLD
 Description:
     Threshold for QP scaling.  If T is the threshold, then for message sizes < T,
     a single QP is used.  For [T,2T) message sizes, data is split across two QPs.
     For [2T,3T) message sizes, data is split across three QPs, and so on.
-    Once we hit the maximum number of QPs (see NCCL_CVAR_CTRAN_IB_MAX_QPS), the
+    Once we hit the maximum number of QPs (see NCCL_CTRAN_IB_MAX_QPS), the
     data is split across all available QPs.
 Type: int
 Default: 1048576
 
-NCCL_CVAR_CTRAN_PROFILING
+NCCL_CTRAN_PROFILING
 Description:
     Kind of ctran profiling needed.
     none - No profiling
     stdout - Dump profiling data to stdout
     kineto - Dump profiling data to a kineto log
-       (for kineto profiling, see also NCCL_CVAR_CTRAN_KINETO_PROFILE_DIR)
+       (for kineto profiling, see also NCCL_CTRAN_KINETO_PROFILE_DIR)
 Type: enum
 Default: none
 
-NCCL_CVAR_CTRAN_KINETO_PROFILE_DIR
+NCCL_CTRAN_KINETO_PROFILE_DIR
 Description:
     Directory to place Ctran kineto profiling logs.
-    (see also NCCL_CVAR_CTRAN_PROFILING)
+    (see also NCCL_CTRAN_PROFILING)
 Type: string
 Default: /tmp
 
-NCCL_CVAR_CTRAN_REGISTER
+NCCL_CTRAN_REGISTER
 Description:
     Kind of registration to use for ctran user buffers
     none - No registration
@@ -164,7 +164,7 @@ Description:
 Type: enum
 Default: lazy
 
-NCCL_CVAR_CTRAN_BACKENDS
+NCCL_CTRAN_BACKENDS
 Description:
     Backends to enable for ctran
     ib - RoCE/IB backend
@@ -172,7 +172,7 @@ Description:
 Type: enumlist
 Default: ib
 
-NCCL_CVAR_CTRAN_REGISTER_REPORT_SNAPSHOT_COUNT
+NCCL_CTRAN_REGISTER_REPORT_SNAPSHOT_COUNT
 Description:
     In additional to registration snapshot reported at communicator destroy
     time, this variable allows a snapshot to be reported whenever once every

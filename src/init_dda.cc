@@ -14,26 +14,26 @@
 /*
 === BEGIN_NCCL_CVAR_INFO_BLOCK ===
 
- - name        : NCCL_CVAR_DDA_ALLREDUCE_LARGE_MESSAGE_HCM
+ - name        : NCCL_DDA_ALLREDUCE_LARGE_MESSAGE_HCM
    type        : bool
    default     : false
    description : |-
      Enable DDA Allreduce for large messages on HCM platforms.
 
- - name        : NCCL_CVAR_DDA_ALLREDUCE_TMPBUFF_SIZE
+ - name        : NCCL_DDA_ALLREDUCE_TMPBUFF_SIZE
    type        : int
    default     : 33554432
    description : |-
      DDA Allreduce temporary buffer size.
 
- - name        : NCCL_CVAR_DDA_MAX_RANKS
+ - name        : NCCL_DDA_MAX_RANKS
    type        : int
    default     : 16
    description : |-
      Message size at which DDA Allreduce switches to the tree algorithm.
      Only applies to HCM-based systems.
 
- - name        : NCCL_CVAR_ALLREDUCE_ALGO
+ - name        : NCCL_ALLREDUCE_ALGO
    type        : enum
    default     : orig
    choices     : orig, dda
@@ -68,7 +68,7 @@ ncclDDAAllReduceAlgo_t getAllReduceAlgo(const void* sendbuff, void* recvbuff,
   const auto bytes = count * typeSize(datatype);
   int numDDAThreads = 0;
 
-  if (NCCL_CVAR_ALLREDUCE_ALGO == NCCL_CVAR_ALLREDUCE_ALGO::orig) {
+  if (NCCL_ALLREDUCE_ALGO == NCCL_ALLREDUCE_ALGO::orig) {
     goto algo_default;
   }
 
@@ -83,7 +83,7 @@ ncclDDAAllReduceAlgo_t getAllReduceAlgo(const void* sendbuff, void* recvbuff,
   if ((numDDAThreads != comm->nRanks) || /* collective must only contain dda ranks */
       (numDDAThreads & (numDDAThreads - 1)) || /* power of two ranks */
       (numDDAThreads == 1) || /* more than one rank */
-      (numDDAThreads > NCCL_CVAR_DDA_MAX_RANKS) || /* only small rank counts are supported */
+      (numDDAThreads > NCCL_DDA_MAX_RANKS) || /* only small rank counts are supported */
       (op != ncclSum) || /* only sum is supported */
       ((uintptr_t)sendbuff % 16) || /* 16-byte alignment */
       ((uintptr_t)recvbuff % 16)) { /* 16-byte alignment */
@@ -91,29 +91,29 @@ ncclDDAAllReduceAlgo_t getAllReduceAlgo(const void* sendbuff, void* recvbuff,
   }
 
   if (comm->dda->topoType == NCCL_DDA_TOPO_TYPE__NVS) {
-    if (bytes < NCCL_CVAR_DDA_ALLREDUCE_TREE_THRESHOLD_NVS) {
+    if (bytes < NCCL_DDA_ALLREDUCE_TREE_THRESHOLD_NVS) {
       if ((bytes % 16) || /* allow for 16-byte loads */
           (sendbuff == recvbuff)) { /* in-place reduction */
         goto algo_ipc;
       }
-    } else { /* bytes >= NCCL_CVAR_DDA_ALLREDUCE_TREE_THRESHOLD_NVS */
+    } else { /* bytes >= NCCL_DDA_ALLREDUCE_TREE_THRESHOLD_NVS */
       if (bytes % (16 * comm->nRanks)) { /* allow for 16-byte loads */
         goto algo_ipc;
       }
     }
   } else { /* topoType == NCCL_DDA_TOPO_TYPE__HCM */
-    if (bytes < NCCL_CVAR_DDA_ALLREDUCE_TREE_THRESHOLD_HCM) {
+    if (bytes < NCCL_DDA_ALLREDUCE_TREE_THRESHOLD_HCM) {
       if (bytes % 16) { /* allow for 16-byte loads */
         goto algo_ipc;
       }
-      if (bytes > NCCL_CVAR_DDA_ALLREDUCE_TMPBUFF_SIZE) { /* need tmpbuff */
+      if (bytes > NCCL_DDA_ALLREDUCE_TMPBUFF_SIZE) { /* need tmpbuff */
         goto algo_ipc;
       }
-    } else if (NCCL_CVAR_DDA_ALLREDUCE_LARGE_MESSAGE_HCM) {
+    } else if (NCCL_DDA_ALLREDUCE_LARGE_MESSAGE_HCM) {
       if (bytes % (16 * comm->nRanks)) { /* allow for 16-byte loads */
         goto algo_ipc;
       }
-      if (bytes > comm->nRanks * NCCL_CVAR_DDA_ALLREDUCE_TMPBUFF_SIZE) { /* need tmpbuff */
+      if (bytes > comm->nRanks * NCCL_DDA_ALLREDUCE_TMPBUFF_SIZE) { /* need tmpbuff */
         goto algo_ipc;
       }
     } else {
@@ -126,31 +126,31 @@ algo_ipc:
   if ((comm->nRanks != comm->localRanks) || /* all ranks must be local */
       (comm->nRanks & (comm->nRanks - 1)) || /* power of two ranks */
       (comm->nRanks == 1) || /* more than one rank */
-      (comm->nRanks > NCCL_CVAR_DDA_MAX_RANKS) || /* only small rank counts are supported */
+      (comm->nRanks > NCCL_DDA_MAX_RANKS) || /* only small rank counts are supported */
       (op != ncclSum)) { /* only sum is supported */
     goto algo_default;
   }
 
   if (comm->dda->topoType == NCCL_DDA_TOPO_TYPE__NVS) {
-    if (bytes < NCCL_CVAR_DDA_ALLREDUCE_TREE_THRESHOLD_NVS) {
+    if (bytes < NCCL_DDA_ALLREDUCE_TREE_THRESHOLD_NVS) {
       if (bytes % 16) { /* allow for 16-byte loads */
         goto algo_default;
       }
-    } else { /* bytes >= NCCL_CVAR_DDA_ALLREDUCE_TREE_THRESHOLD_NVS */
+    } else { /* bytes >= NCCL_DDA_ALLREDUCE_TREE_THRESHOLD_NVS */
       if (bytes % (16 * comm->nRanks)) { /* allow for 16-byte loads */
         goto algo_default;
       }
     }
 
-    if (bytes > NCCL_CVAR_DDA_ALLREDUCE_TMPBUFF_SIZE) { /* need tmpbuff for IPC */
+    if (bytes > NCCL_DDA_ALLREDUCE_TMPBUFF_SIZE) { /* need tmpbuff for IPC */
       goto algo_default;
     }
   } else { /* topoType == NCCL_DDA_TOPO_TYPE__HCM */
-    if (bytes < NCCL_CVAR_DDA_ALLREDUCE_TREE_THRESHOLD_HCM) {
+    if (bytes < NCCL_DDA_ALLREDUCE_TREE_THRESHOLD_HCM) {
       if (bytes % 16) { /* allow for 16-byte loads */
         goto algo_default;
       }
-      if (bytes > NCCL_CVAR_DDA_ALLREDUCE_TMPBUFF_SIZE / 2) { /* need tmpbuff */
+      if (bytes > NCCL_DDA_ALLREDUCE_TMPBUFF_SIZE / 2) { /* need tmpbuff */
         goto algo_default;
       }
     } else {

@@ -9,7 +9,7 @@ NCCL_API(ncclResult_t, ncclCommRegister, const ncclComm_t comm, void* buff, size
 ncclResult_t ncclCommRegister(const ncclComm_t comm, void* buff, size_t size, void** handle) {
   ncclResult_t res = ncclSuccess;
 
-  if (NCCL_CVAR_CTRAN_REGISTER != NCCL_CVAR_CTRAN_REGISTER::none) {
+  if (NCCL_CTRAN_REGISTER != NCCL_CTRAN_REGISTER::none) {
     NCCLCHECKGOTO(PtrCheck(comm, "ncclCommRegister", "comm"), res, exit);
     NCCLCHECKGOTO(comm->ctranMapper->regMem(buff, size, handle), res, exit);
   } else {
@@ -24,7 +24,7 @@ NCCL_API(ncclResult_t, ncclCommDeregister, const ncclComm_t comm, void* handle);
 ncclResult_t ncclCommDeregister(const ncclComm_t comm, void* handle) {
   ncclResult_t res = ncclSuccess;
 
-  if (NCCL_CVAR_CTRAN_REGISTER != NCCL_CVAR_CTRAN_REGISTER::none) {
+  if (NCCL_CTRAN_REGISTER != NCCL_CTRAN_REGISTER::none) {
     NCCLCHECKGOTO(PtrCheck(comm, "ncclCommRegister", "comm"), res, exit);
     NCCLCHECKGOTO(comm->ctranMapper->deregMem(handle), res, exit);
   }

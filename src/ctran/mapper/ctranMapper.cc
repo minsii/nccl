@@ -18,7 +18,7 @@ static std::unordered_map<uint64_t, ctranMapper*> allCommHashCtranMapperMap;
 /*
 === BEGIN_NCCL_CVAR_INFO_BLOCK ===
 
- - name        : NCCL_CVAR_CTRAN_PROFILING
+ - name        : NCCL_CTRAN_PROFILING
    type        : enum
    default     : none
    choices     : none, stdout, kineto
@@ -27,16 +27,16 @@ static std::unordered_map<uint64_t, ctranMapper*> allCommHashCtranMapperMap;
      none - No profiling
      stdout - Dump profiling data to stdout
      kineto - Dump profiling data to a kineto log
-        (for kineto profiling, see also NCCL_CVAR_CTRAN_KINETO_PROFILE_DIR)
+        (for kineto profiling, see also NCCL_CTRAN_KINETO_PROFILE_DIR)
 
- - name        : NCCL_CVAR_CTRAN_KINETO_PROFILE_DIR
+ - name        : NCCL_CTRAN_KINETO_PROFILE_DIR
    type        : string
    default     : "/tmp"
    description : |-
      Directory to place Ctran kineto profiling logs.
-     (see also NCCL_CVAR_CTRAN_PROFILING)
+     (see also NCCL_CTRAN_PROFILING)
 
- - name        : NCCL_CVAR_CTRAN_REGISTER
+ - name        : NCCL_CTRAN_REGISTER
    type        : enum
    default     : lazy
    choices     : none, lazy, eager
@@ -49,7 +49,7 @@ static std::unordered_map<uint64_t, ctranMapper*> allCommHashCtranMapperMap;
      eager - Eager registration (register buffers as soon as it is
              provided by the user)
 
- - name        : NCCL_CVAR_CTRAN_BACKENDS
+ - name        : NCCL_CTRAN_BACKENDS
    type        : enumlist
    default     : ib
    choices     : ib, nvl
@@ -58,7 +58,7 @@ static std::unordered_map<uint64_t, ctranMapper*> allCommHashCtranMapperMap;
      ib - RoCE/IB backend
      nvl - NVLink backend
 
- - name        : NCCL_CVAR_CTRAN_REGISTER_REPORT_SNAPSHOT_COUNT
+ - name        : NCCL_CTRAN_REGISTER_REPORT_SNAPSHOT_COUNT
    type        : int
    default     : 0
    description : |-
@@ -77,10 +77,10 @@ ctranMapper::ctranMapper(ncclComm *comm) {
   this->pimpl->mapperRegElemList = new class ctranAvlTree();
 
   /* check user preference for backends */
-  for (auto b : NCCL_CVAR_CTRAN_BACKENDS) {
-    if (b == NCCL_CVAR_CTRAN_BACKENDS::ib) {
+  for (auto b : NCCL_CTRAN_BACKENDS) {
+    if (b == NCCL_CTRAN_BACKENDS::ib) {
       this->pimpl->backends.push_back(ctranMapperBackend::IB);
-    } else if (b == NCCL_CVAR_CTRAN_BACKENDS::nvl) {
+    } else if (b == NCCL_CTRAN_BACKENDS::nvl) {
       this->pimpl->backends.push_back(ctranMapperBackend::NVL);
     }
   }
@@ -213,7 +213,7 @@ void ctranMapper::reportRegSnapshot(void) {
 ctranMapper::~ctranMapper() {
   /* flush timestamps */
   if (!this->timestamps.empty()) {
-    if (NCCL_CVAR_CTRAN_PROFILING == NCCL_CVAR_CTRAN_PROFILING::stdout) {
+    if (NCCL_CTRAN_PROFILING == NCCL_CTRAN_PROFILING::stdout) {
       std::cout << "[CTRAN-MAPPER] Communication Profiling:" << std::endl;
       for (auto& ts : this->timestamps) {
         std::cout << "    collective=" << ts.algo << std::endl;
@@ -245,9 +245,9 @@ ctranMapper::~ctranMapper() {
         }
       }
       std::cout << std::flush;
-    } else if (NCCL_CVAR_CTRAN_PROFILING == NCCL_CVAR_CTRAN_PROFILING::kineto) {
+    } else if (NCCL_CTRAN_PROFILING == NCCL_CTRAN_PROFILING::kineto) {
       auto pid = getpid();
-      std::string filename(NCCL_CVAR_CTRAN_KINETO_PROFILE_DIR +
+      std::string filename(NCCL_CTRAN_KINETO_PROFILE_DIR +
           std::string("/nccl_ctran_log.") + std::to_string(pid) +
           std::string(".json"));
       INFO(NCCL_ALL, "Dumping ctran profile to %s\n", filename.c_str());
@@ -375,8 +375,8 @@ ncclResult_t ctranMapper::impl::regMem(struct ctranMapperRegElem *mapperRegElem)
       this->totalNumCachedRegistrations, this->totalNumRegistrations, this->totalNumDynamicRegistrations);
 
   // Allow snapshot report during long job running
-  if (NCCL_CVAR_CTRAN_REGISTER_REPORT_SNAPSHOT_COUNT > 0 &&
-      registerDurs.size() % NCCL_CVAR_CTRAN_REGISTER_REPORT_SNAPSHOT_COUNT == 0) {
+  if (NCCL_CTRAN_REGISTER_REPORT_SNAPSHOT_COUNT > 0 &&
+      registerDurs.size() % NCCL_CTRAN_REGISTER_REPORT_SNAPSHOT_COUNT == 0) {
     reportGlobalRegSnapshot();
   }
 
@@ -428,7 +428,7 @@ ncclResult_t ctranMapper::regMem(const void *buf, std::size_t len, void **hdl, b
 
   this->pimpl->mapperRegElemList->insert(buf, len, reinterpret_cast<void *>(mapperRegElem), hdl);
 
-  if (NCCL_CVAR_CTRAN_REGISTER == NCCL_CVAR_CTRAN_REGISTER::eager || forceRegist) {
+  if (NCCL_CTRAN_REGISTER == NCCL_CTRAN_REGISTER::eager || forceRegist) {
     NCCLCHECKGOTO(this->pimpl->regMem(mapperRegElem), res, fail);
   } else {
     // In lazy registration
