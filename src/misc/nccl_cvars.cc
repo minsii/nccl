@@ -93,6 +93,8 @@ enum NCCL_SENDRECV_ALGO NCCL_SENDRECV_ALGO;
 
 std::set<std::string> NCCL_IB_HCA;
 
+bool NCCL_CTRAN_IB_TRAFFIC_PROFILNG;
+
 int NCCL_CTRAN_IB_MAX_QPS;
 
 int NCCL_CTRAN_IB_QP_SCALING_THRESHOLD;
@@ -126,6 +128,7 @@ void ncclCvarInit() {
   env.insert("NCCL_DDA_FORCE_P2P_ACCESS");
   env.insert("NCCL_SENDRECV_ALGO");
   env.insert("NCCL_IB_HCA");
+  env.insert("NCCL_CTRAN_IB_TRAFFIC_PROFILNG");
   env.insert("NCCL_CTRAN_IB_MAX_QPS");
   env.insert("NCCL_CTRAN_IB_QP_SCALING_THRESHOLD");
   env.insert("NCCL_CTRAN_PROFILING");
@@ -238,6 +241,8 @@ void ncclCvarInit() {
   }
 
   NCCL_IB_HCA = env2strlist("NCCL_IB_HCA", nullptr);
+
+  NCCL_CTRAN_IB_TRAFFIC_PROFILNG = env2bool("NCCL_CTRAN_IB_TRAFFIC_PROFILNG", "False");
 
   NCCL_CTRAN_IB_MAX_QPS = env2int("NCCL_CTRAN_IB_MAX_QPS", "1");
 

@@ -6,6 +6,7 @@
 #include <vector>
 #include <thread>
 #include <mutex>
+#include <stdint.h>
 #include <unordered_map>
 #include "ibvwrap.h"
 #include "bootstrap.h"
@@ -42,8 +43,13 @@ class ctranIbSingleton {
     std::vector<struct ibv_context *> contexts;
     std::vector<struct ibv_pd *> pds;
     std::vector<std::string> devNames;
+    void recordCtxTraffic(struct ibv_context *ctx, size_t nbytes);
+    void recordQpTraffic(struct ibv_qp* qp, size_t nbytes);
 
   private:
+    std::unordered_map<std::string, size_t> trafficPerDevice;
+    std::unordered_map<uint32_t, size_t> trafficPerQP;
+    std::mutex trafficRecordMutex;
     ctranIbSingleton();
     ~ctranIbSingleton();
 };

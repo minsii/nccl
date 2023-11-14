@@ -54,6 +54,8 @@ extern enum NCCL_SENDRECV_ALGO NCCL_SENDRECV_ALGO;
 
 extern std::set<std::string> NCCL_IB_HCA;
 
+extern bool NCCL_CTRAN_IB_TRAFFIC_PROFILNG;
+
 extern int NCCL_CTRAN_IB_MAX_QPS;
 
 extern int NCCL_CTRAN_IB_QP_SCALING_THRESHOLD;

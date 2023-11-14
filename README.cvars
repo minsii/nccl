@@ -117,6 +117,13 @@ Description:
 Type: stringlist
 Default: None
 
+NCCL_CTRAN_IB_TRAFFIC_PROFILNG
+Description:
+    Enable IB transport traffic profiling.
+    Disabled by default.
+Type: bool
+Default: False
+
 NCCL_CTRAN_IB_MAX_QPS
 Description:
     Maximum number of QPs to enable, so data can be split across

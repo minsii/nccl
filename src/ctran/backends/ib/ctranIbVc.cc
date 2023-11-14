@@ -1,6 +1,8 @@
 // (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
 #include <iostream>
+#include <mutex>
+#include <unordered_map>
 #include <vector>
 #include <thread>
 #include <unistd.h>
@@ -343,6 +345,8 @@ ncclResult_t ctranIb::impl::vc::postPutMsg(const void *sbuf, void *dbuf, std::si
   }
 
   uint64_t offset = 0;
+  ctranIbSingleton& s = ctranIbSingleton::getInstance();
+  s.recordCtxTraffic(this->context, len_);
 
   for (int i = 0; i < numQps; i++) {
     uint64_t len = len_ / numQps;
@@ -386,6 +390,7 @@ ncclResult_t ctranIb::impl::vc::postPutMsg(const void *sbuf, void *dbuf, std::si
       wr.wr.rdma.remote_addr = reinterpret_cast<uint64_t>(dbuf) + offset;
       wr.wr.rdma.rkey = rkey;
 
+      s.recordQpTraffic(this->dataQp[i], toSend);
       NCCLCHECKGOTO(wrap_ibv_post_send(this->dataQp[i], &wr, &badWr), res, exit);
 
       len -= toSend;

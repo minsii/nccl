@@ -22,6 +22,13 @@
      List of IB HCAs available for NCCL to use.
      (this needs to be renamed to NCCL_IB_HCA_LIST eventually)
 
+ - name        : NCCL_CTRAN_IB_TRAFFIC_PROFILNG
+   type        : bool
+   default     : false
+   description : |-
+     Enable IB transport traffic profiling.
+     Disabled by default.
+
 === END_NCCL_CVAR_INFO_BLOCK ===
 */
 
@@ -107,6 +114,41 @@ ctranIbSingleton::~ctranIbSingleton() {
   for (auto context : this->contexts) {
     NCCLCHECKIGNORE(wrap_ibv_close_device(context));
   }
+
+  if (!NCCL_CTRAN_IB_TRAFFIC_PROFILNG)
+    return;
+
+  this->trafficRecordMutex.lock();
+  for (auto& it : this->trafficPerDevice) {
+    INFO(NCCL_INIT, "CTRAN-IB: [traffic profiling] device %s total traffic: %ld bytes", it.first.c_str(), it.second);
+  }
+  for (auto& it : this->trafficPerQP) {
+    INFO(NCCL_INIT, "CTRAN-IB: [traffic profiling] qp %d total traffic: %ld bytes", it.first, it.second);
+  }
+}
+
+void ctranIbSingleton::recordCtxTraffic(
+    struct ibv_context* ctx,
+    size_t nbytes) {
+  if (!NCCL_CTRAN_IB_TRAFFIC_PROFILNG)
+    return;
+  std::lock_guard<std::mutex> guard(this->trafficRecordMutex);
+  auto devName = std::string(ctx->device->name);
+
+  if (this->trafficPerDevice.count(devName) == 0) {
+    this->trafficPerDevice[devName] = 0;
+  }
+  this->trafficPerDevice[devName] += nbytes;
+}
+
+void ctranIbSingleton::recordQpTraffic(struct ibv_qp* qp, size_t nbytes) {
+  if (!NCCL_CTRAN_IB_TRAFFIC_PROFILNG)
+    return;
+  std::lock_guard<std::mutex> guard(this->trafficRecordMutex);
+  if (this->trafficPerQP.count(qp->qp_num) == 0) {
+    this->trafficPerQP[qp->qp_num] = 0;
+  }
+  this->trafficPerQP[qp->qp_num] += nbytes;
 }
 
 ctranIb::ctranIb(ncclComm *comm) {
@@ -120,7 +162,7 @@ ctranIb::ctranIb(ncclComm *comm) {
   this->pimpl->context = s.contexts[comm->cudaDev];
   this->pimpl->pd = s.pds[comm->cudaDev];
   this->pimpl->port = s.ports[comm->cudaDev];
-  INFO(NCCL_INIT, "CTRAN-IB: using device %s, port %d", s.devNames[comm->cudaDev].c_str(), this->pimpl->port);
+  INFO(NCCL_INIT, "CTRAN-IB: using device %s, port %d commHash %lu", s.devNames[comm->cudaDev].c_str(), this->pimpl->port, comm->commHash);
 
   struct ibv_device_attr devAttr;
   NCCLCHECKIGNORE(wrap_ibv_query_device(this->pimpl->context, &devAttr));
