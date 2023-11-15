@@ -36,6 +36,9 @@ extern "C" {
 /* Opaque handle to communicator */
 typedef struct ncclComm* ncclComm_t;
 #define NCCL_COMM_NULL NULL
+extern ncclComm_t ncclCommWorld;
+#define NCCL_COMM_WORLD ncclCommWorld
+
 
 #define NCCL_UNIQUE_ID_BYTES 128
 typedef struct { char internal[NCCL_UNIQUE_ID_BYTES]; } ncclUniqueId;
