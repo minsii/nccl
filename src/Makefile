@@ -18,6 +18,7 @@ LIBSRCFILES := init.cc init_nvtx.cc channel.cc bootstrap.cc transport.cc enqueue
                 graph/topo.cc graph/paths.cc graph/search.cc graph/connect.cc graph/rings.cc graph/trees.cc graph/tuning.cc graph/xml.cc
 LIBSRCFILES += collectives/all_reduce_sparse_block.cc setinfo.cc
 LIBSRCFILES += misc/colltrace.cc misc/tuner.cc
+LIBSRCFILES += misc/nccl_cvars.cc
 LIBSRCFILES += init_dda.cc collectives/ddaPrivateMd.cc collectives/ddaMemHandles.cc \
 		collectives/all_reduce_dda.cc
 LIBSRCFILES += algorithms/AlgoInit.cc algorithms/AlgoManager.cc algorithms/AlgoUtils.cc algorithms/AllReduceDdaNvsFlatThreadedAlgo.cc \
