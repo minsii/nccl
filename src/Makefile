@@ -83,6 +83,7 @@ $(INCDIR)/nccl.h : nccl.h.in ../makefiles/version.mk
 	    -e "s/\$${nccl:Patch}/$(NCCL_PATCH)/g" \
 	    -e "s/\$${nccl:Suffix}/$(NCCL_SUFFIX)/g" \
 	    -e "s/\$${nccl:Version}/$(NCCL_VERSION)/g" \
+	    -e "s/\$${nccl:DevSignature}/$(DEV_SIGNATURE)/g" \
 	    $< > $@
 
 $(LIBDIR)/$(LIBTARGET): $(LIBOBJ) $(DEVICELIB)

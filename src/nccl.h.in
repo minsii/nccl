@@ -16,7 +16,7 @@
 #define NCCL_MAJOR ${nccl:Major}
 #define NCCL_MINOR ${nccl:Minor}
 #define NCCL_PATCH ${nccl:Patch}
-#define NCCL_SUFFIX "${nccl:Suffix}"
+#define NCCL_SUFFIX "${nccl:Suffix} ${nccl:DevSignature}"
 #define IS_NCCL_EXP
 
 #define NCCL_VERSION_CODE ${nccl:Version}
