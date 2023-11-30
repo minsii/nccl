@@ -57,6 +57,7 @@ ncclResult_t ncclWinAllocShared(size_t size, ncclComm_t comm, ncclWin_t* win) {
     } else {
       remoteAddr = addr;
     }
+    win_->remotePtrs[i] = remoteAddr;
   }
 
   *win = win_;
