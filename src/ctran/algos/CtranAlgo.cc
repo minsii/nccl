@@ -4,6 +4,7 @@
 #include <nccl_common.h>
 #include <memory>
 #include <stdexcept>
+#include "CtranChecks.h"
 #include "DdaThreadedData.h"
 #include "bootstrap.h"
 #include "checks.h"
@@ -25,8 +26,6 @@
 */
 
 CtranAlgo::CtranAlgo(ncclComm* comm) {
-  ncclResult_t res = ncclSuccess;
-
   this->comm_ = comm;
 
   // Initialize inter-process shared device buffer only for multi-process comm.
@@ -36,12 +35,8 @@ CtranAlgo::CtranAlgo(ncclComm* comm) {
   }
 
   // Initialize local device state after shared resource creation
-  NCCLCHECKGOTO(this->initDevState(), res, fail);
+  NCCLCHECKTHROW(this->initDevState());
   return;
-
-fail:
-  throw std::runtime_error(
-      "CTRAN-ALGO : Failed to initialize Ctran algorithm");
 }
 
 CtranAlgo::~CtranAlgo() {
@@ -126,7 +121,6 @@ ncclResult_t CtranAlgo::initDevState() {
 }
 
 CtranAlgo::SharedResource::SharedResource(ncclComm* comm) {
-  ncclResult_t res = ncclSuccess;
   this->comm_ = comm;
 
   // Create local shared memory region
@@ -139,11 +133,9 @@ CtranAlgo::SharedResource::SharedResource(ncclComm* comm) {
       (sizeof(CtranAlgoDeviceBufState) + NCCL_CTRAN_SHARED_DEVBUF_SIZE) *
       (this->comm_->localRanks - 1);
 
-  CUDACHECKGOTO(cudaMalloc(&this->devShmPtr_, shmSize), res, fail);
-  CUDACHECKGOTO(
-      cudaIpcGetMemHandle(&handles[this->comm_->localRank], this->devShmPtr_),
-      res,
-      fail);
+  CUDACHECKTHROW(cudaMalloc(&this->devShmPtr_, shmSize));
+  CUDACHECKTHROW(
+      cudaIpcGetMemHandle(&handles[this->comm_->localRank], this->devShmPtr_));
 
   // Initialize device state for each peer
   for (int i = 0; i < this->comm_->localRanks; i++) {
@@ -159,27 +151,21 @@ CtranAlgo::SharedResource::SharedResource(ncclComm* comm) {
     for (int i = 0; i < CTRAN_ALGO_MAX_THREAD_BLOCKS; i++) {
       stateInitialVal.stepOnSameBlockIdx[i] = CTRAN_ALGO_STEP_RESET;
     }
-    CUDACHECKGOTO(
-        cudaMemcpy(
-            statePtr_d,
-            &stateInitialVal,
-            sizeof(CtranAlgoDeviceBufState),
-            cudaMemcpyHostToDevice),
-        res,
-        fail);
+    CUDACHECKTHROW(cudaMemcpy(
+        statePtr_d,
+        &stateInitialVal,
+        sizeof(CtranAlgoDeviceBufState),
+        cudaMemcpyHostToDevice));
   }
 
   // Exchange IPC handle with all local ranks
-  NCCLCHECKGOTO(
-      bootstrapIntraNodeAllGather(
-          this->comm_->bootstrap,
-          this->comm_->localRankToRank,
-          this->comm_->localRank,
-          this->comm_->localRanks,
-          handles.data(),
-          sizeof(cudaIpcMemHandle_t)),
-      res,
-      fail);
+  NCCLCHECKTHROW(bootstrapIntraNodeAllGather(
+      this->comm_->bootstrap,
+      this->comm_->localRankToRank,
+      this->comm_->localRank,
+      this->comm_->localRanks,
+      handles.data(),
+      sizeof(cudaIpcMemHandle_t)));
 
   // Setup mapped shared memory region pointers for all local ranks
   this->mappedDevShmPtrs.resize(this->comm_->localRanks, nullptr);
@@ -188,11 +174,8 @@ CtranAlgo::SharedResource::SharedResource(ncclComm* comm) {
       this->mappedDevShmPtrs[i] = this->devShmPtr_;
     } else {
       void* mappedDevPtr = nullptr;
-      CUDACHECKGOTO(
-          cudaIpcOpenMemHandle(
-              &mappedDevPtr, handles[i], cudaIpcMemLazyEnablePeerAccess),
-          res,
-          fail);
+      CUDACHECKTHROW(cudaIpcOpenMemHandle(
+          &mappedDevPtr, handles[i], cudaIpcMemLazyEnablePeerAccess));
       this->mappedDevShmPtrs[i] = mappedDevPtr;
     }
   }
@@ -204,10 +187,6 @@ CtranAlgo::SharedResource::SharedResource(ncclComm* comm) {
       this->comm_->rank,
       this->comm_->localRank);
   return;
-
-fail:
-  throw std::runtime_error(
-      "CTRAN-ALGO : Failed to allocate internal shared resource");
 }
 
 CtranAlgo::SharedResource::~SharedResource() {

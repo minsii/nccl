@@ -11,6 +11,7 @@
 #include "CtranIb.h"
 #include "CtranIbImpl.h"
 #include "CtranIbVc.h"
+#include "CtranChecks.h"
 
 /*
 === BEGIN_NCCL_CVAR_INFO_BLOCK ===
@@ -69,32 +70,25 @@ CtranIb::Impl::VirtualConn::VirtualConn(
     int port,
     int peerRank)
     : peerRank(peerRank), context_(context), pd_(pd), cq_(cq), port_(port) {
-  ncclResult_t res = ncclSuccess;
   if (NCCL_CTRAN_IB_MAX_QPS > CTRAN_HARDCODED_MAX_QPS) {
     WARN("CTRAN-IB: CTRAN_MAX_QPS set to more than the hardcoded max value (%d)", CTRAN_HARDCODED_MAX_QPS);
   }
 
-  NCCLCHECKGOTO(
-      wrap_ibv_reg_mr(
-          &this->sendCtrl_.mr_,
-          pd,
-          (void*)this->sendCtrl_.cmsg_,
-          MAX_CONTROL_MSGS * sizeof(struct ControlMsg),
-          IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE |
-              IBV_ACCESS_REMOTE_READ),
-      res,
-      fail);
+  NCCLCHECKTHROW(wrap_ibv_reg_mr(
+      &this->sendCtrl_.mr_,
+      pd,
+      (void*)this->sendCtrl_.cmsg_,
+      MAX_CONTROL_MSGS * sizeof(struct ControlMsg),
+      IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE |
+          IBV_ACCESS_REMOTE_READ));
 
-  NCCLCHECKGOTO(
-      wrap_ibv_reg_mr(
-          &this->recvCtrl_.mr_,
-          pd,
-          (void*)this->recvCtrl_.cmsg_,
-          MAX_CONTROL_MSGS * sizeof(struct ControlMsg),
-          IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE |
-              IBV_ACCESS_REMOTE_READ),
-      res,
-      fail);
+  NCCLCHECKTHROW(wrap_ibv_reg_mr(
+      &this->recvCtrl_.mr_,
+      pd,
+      (void*)this->recvCtrl_.cmsg_,
+      MAX_CONTROL_MSGS * sizeof(struct ControlMsg),
+      IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE |
+          IBV_ACCESS_REMOTE_READ));
 
   for (int i = 0; i < MAX_CONTROL_MSGS; i++) {
     this->sendCtrl_.freeMsgs_.push_back(&this->sendCtrl_.cmsg_[i]);
@@ -110,8 +104,6 @@ CtranIb::Impl::VirtualConn::VirtualConn(
     this->notifications_.push_back(q);
   }
   return;
-fail:
-  throw std::runtime_error("CTRAN-IB: Failed to create VirtualConn");
 }
 
 CtranIb::Impl::VirtualConn::~VirtualConn() {

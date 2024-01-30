@@ -14,6 +14,7 @@
 #include "bootstrap.h"
 #include "comm.h"
 #include "nccl_cvars.h"
+#include "CtranChecks.h"
 
 /*
 === BEGIN_NCCL_CVAR_INFO_BLOCK ===
@@ -153,7 +154,6 @@ static void recordRegistDuration(
 }
 
 CtranMapper::CtranMapper(ncclComm* comm) {
-  ncclResult_t res = ncclSuccess;
   this->pimpl_ = std::unique_ptr<impl>(new impl());
 
   /* mapperRegElemList */
@@ -202,8 +202,8 @@ CtranMapper::CtranMapper(ncclComm* comm) {
   this->pimpl_->totalNumRegLookupHit = 0;
   this->pimpl_->totalNumRegLookupMiss = 0;
 
-  CUDACHECKGOTO(
-      cudaStreamCreateWithFlags(&this->internalStream, cudaStreamNonBlocking), res, fail);
+  CUDACHECKTHROW(
+      cudaStreamCreateWithFlags(&this->internalStream, cudaStreamNonBlocking));
 
   this->rank = comm->rank;
   this->commHash = comm->commHash;
@@ -216,9 +216,6 @@ CtranMapper::CtranMapper(ncclComm* comm) {
 
   this->bootstrapTopology(comm);
   return;
-
-fail:
-  throw std::runtime_error("Failed to initialize CtranMapper");
 }
 
 void CtranMapper::reportRegSnapshot(void) {

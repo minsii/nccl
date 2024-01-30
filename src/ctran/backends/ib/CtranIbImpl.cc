@@ -11,21 +11,21 @@
 #include "CtranIbImpl.h"
 #include "CtranIbVc.h"
 #include "CtranUtils.h"
+#include "CtranChecks.h"
 
 void CtranIb::Impl::bootstrapAccept(CtranIb::Impl *pimpl) {
-  ncclResult_t res = ncclSuccess;
   while (1) {
     struct ncclSocket sock;
     int peerRank;
     int cmd;
 
-    NCCLCHECKGOTO(ncclSocketInit(&sock), res, fail);
-    NCCLCHECKGOTO(ncclSocketAccept(&sock, &pimpl->listenSocket), res, fail);
-    NCCLCHECKGOTO(ncclSocketRecv(&sock, &cmd, sizeof(int)), res, fail);
-    NCCLCHECKGOTO(ncclSocketRecv(&sock, &peerRank, sizeof(int)), res, fail);
+    NCCLCHECKTHROW(ncclSocketInit(&sock));
+    NCCLCHECKTHROW(ncclSocketAccept(&sock, &pimpl->listenSocket));
+    NCCLCHECKTHROW(ncclSocketRecv(&sock, &cmd, sizeof(int)));
+    NCCLCHECKTHROW(ncclSocketRecv(&sock, &peerRank, sizeof(int)));
 
     if (cmd == BOOTSTRAP_CMD_TERMINATE) {
-      NCCLCHECKGOTO(ncclSocketClose(&sock), res, fail);
+      NCCLCHECKTHROW(ncclSocketClose(&sock));
       break;
     }
 
@@ -40,13 +40,13 @@ void CtranIb::Impl::bootstrapAccept(CtranIb::Impl *pimpl) {
       size = vc->getBusCardSize();
       localBusCard = malloc(size);
       remoteBusCard = malloc(size);
-      NCCLCHECKGOTO(vc->getLocalBusCard(localBusCard), res, fail);
-      NCCLCHECKGOTO(ncclSocketRecv(&sock, remoteBusCard, size), res, fail);
-      NCCLCHECKGOTO(ncclSocketSend(&sock, localBusCard, size), res, fail);
+      NCCLCHECKTHROW(vc->getLocalBusCard(localBusCard));
+      NCCLCHECKTHROW(ncclSocketRecv(&sock, remoteBusCard, size));
+      NCCLCHECKTHROW(ncclSocketSend(&sock, localBusCard, size));
 
       uint32_t controlQp;
       std::vector<uint32_t> dataQps;
-      NCCLCHECKGOTO(vc->setupVc(remoteBusCard, &controlQp, dataQps), res, fail);
+      NCCLCHECKTHROW(vc->setupVc(remoteBusCard, &controlQp, dataQps));
       pimpl->qpToRank[controlQp] = peerRank;
       for (auto qpn : dataQps) {
         pimpl->qpToRank[qpn] = peerRank;
@@ -65,17 +65,14 @@ void CtranIb::Impl::bootstrapAccept(CtranIb::Impl *pimpl) {
 
       /* Ack that the connection is fully established */
       int ack;
-      NCCLCHECKGOTO(ncclSocketSend(&sock, &ack, sizeof(int)), res, fail);
-      NCCLCHECKGOTO(ncclSocketRecv(&sock, &ack, sizeof(int)), res, fail);
+      NCCLCHECKTHROW(ncclSocketSend(&sock, &ack, sizeof(int)));
+      NCCLCHECKTHROW(ncclSocketRecv(&sock, &ack, sizeof(int)));
 
-      NCCLCHECKGOTO(ncclSocketClose(&sock), res, fail);
+      NCCLCHECKTHROW(ncclSocketClose(&sock));
 
     }
   }
   return;
-
-fail:
-  throw std::runtime_error("CTRAN-IB: Failed to accept bootstrap connection");
 }
 
 ncclResult_t CtranIb::Impl::bootstrapConnect(int peerRank, int cmd) {
