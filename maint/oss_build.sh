@@ -14,7 +14,7 @@ fi
 
 set -e
 
-BUILDDIR=${BUILDDIR:=/tmp/nccl-exp/2.18.3/build}
+BUILDDIR=${BUILDDIR:=/tmp/${USER}/nccl-exp/2.18.3/build}
 NVCC_ARCH=${NVCC_ARCH:="a100,h100"}
 CUDA_HOME=${CUDA_HOME:="`realpath ../../tp2/cuda/12.2.2/x86_64`"}
 DEV_SIGNATURE=${DEV_SIGNATURE:="$hash"}
