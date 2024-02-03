@@ -20,6 +20,8 @@ class CtranMapperProfilerTest : public ::testing::Test {
  protected:
   void SetUp() override {
     setenv("NCCL_CTRAN_BACKENDS", "", 1);
+    setenv("NCCL_DEBUG", "INFO", 1);
+    setenv("NCCL_DEBUG_SUBSYS", "INIT", 1);
 
     // A random duration between 0-5ms to test the timer
     srand(time(NULL));
@@ -131,7 +133,6 @@ TEST_F(CtranMapperProfilerTest, MapperFlushTimerStdout) {
 
 TEST_F(CtranMapperProfilerTest, MapperFlushTimerInfo) {
   setenv("NCCL_CTRAN_PROFILING", "info", 1);
-  setenv("NCCL_DEBUG", "INFO", 1);
   ncclCvarInit();
   NCCLCHECKABORT(ncclCommInitAll(&dummyComm, 1, nullptr));
 
@@ -226,8 +227,6 @@ TEST_F(CtranMapperProfilerTest, MapperFlushTimerKineto) {
 
 TEST_F(CtranMapperProfilerTest, regSnapshot) {
   setenv("NCCL_CTRAN_REGISTER_REPORT_SNAPSHOT_COUNT", "0", 1);
-  setenv("NCCL_DEBUG", "INFO", 1);
-  setenv("NCCL_DEBUG_SUBSYS", "INIT", 1);
   ncclCvarInit();
   NCCLCHECKABORT(ncclCommInitAll(&dummyComm, 1, nullptr));
 
@@ -267,6 +266,4 @@ TEST_F(CtranMapperProfilerTest, regSnapshot) {
   EXPECT_THAT(output, testing::HasSubstr(kExpectedOutput2));
 
   unsetenv("NCCL_CTRAN_REGISTER_REPORT_SNAPSHOT_COUNT");
-  unsetenv("NCCL_DEBUG");
-  unsetenv("NCCL_DEBUG_SUBSYS");
 }
