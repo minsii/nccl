@@ -816,15 +816,19 @@ void CtranMapper::bootstrapTopology(ncclComm* comm) {
 
   bootstrapAllGather(comm->bootstrap, (void*)topoBuf.get(), nkeys * sizeof(int64_t));
 
-  for (int rank = 0; rank < comm->nRanks; rank++) {
-    std::string s{"CTRAN topoInfo -- Rank " + std::to_string(rank) + ": "};
-    for (int keyId = 0; keyId < nkeys; keyId++) {
-      (*this->topoInfo)[rank][keyId] = topoBuf[rank * nkeys + keyId];
-      s += std::to_string((*this->topoInfo)[rank][keyId]);
-      if (keyId < nkeys - 1) {
-        s += ", ";
+  if (comm->rank == 0) {
+    for (int rank = 0; rank < comm->nRanks; rank++) {
+      std::string s{
+          "CTRAN topoInfo -- Rank " + std::to_string(rank) + " CommHash " +
+          std::to_string(comm->commHash) + ": "};
+      for (int keyId = 0; keyId < nkeys; keyId++) {
+        (*this->topoInfo)[rank][keyId] = topoBuf[rank * nkeys + keyId];
+        s += std::to_string((*this->topoInfo)[rank][keyId]);
+        if (keyId < nkeys - 1) {
+          s += ", ";
+        }
       }
+      INFO(NCCL_INIT, "%s", s.c_str());
     }
-    INFO(NCCL_INIT, "%s", s.c_str());
   }
 }
