@@ -12,6 +12,7 @@
 #include <sys/syscall.h>
 #include <iomanip>
 #include <sstream>
+#include "logger.h"
 
 /*
 === BEGIN_NCCL_CVAR_INFO_BLOCK ===
@@ -236,7 +237,13 @@ void ncclDebugLog(ncclDebugLogLevel level, unsigned long flags, const char *file
     len += vsnprintf(buffer+len, sizeof(buffer)-len, fmt, vargs);
     va_end(vargs);
     buffer[len++] = '\n';
-    fwrite(buffer, 1, len, ncclDebugFile);
+
+    if (NCCL_LOGGER_MODE == NCCL_LOGGER_MODE::none) {
+      fwrite(buffer, 1, len, ncclDebugFile);
+    } else {
+      NcclLogger::getInstance(ncclDebugFile).log(std::string(buffer, len));
+    }
+
     // also print to stderr if we're logging into file
     if (ncclDebugFile != stdout && ncclDebugFile != stderr &&
         level == NCCL_LOG_WARN) {

@@ -381,6 +381,8 @@ int64_t NCCL_LL_BUFFSIZE;
 int64_t NCCL_LL_BUFFSIZE_DEFAULT;
 int64_t NCCL_LOCAL_REGISTER;
 int64_t NCCL_LOCAL_REGISTER_DEFAULT;
+enum NCCL_LOGGER_MODE NCCL_LOGGER_MODE;
+enum NCCL_LOGGER_MODE NCCL_LOGGER_MODE_DEFAULT;
 int64_t NCCL_MAX_CTAS;
 int64_t NCCL_MAX_CTAS_DEFAULT;
 int64_t NCCL_MAX_NCHANNELS;
@@ -590,6 +592,7 @@ void initEnvSet(std::unordered_set<std::string>& env) {
   env.insert("NCCL_LL128_NTHREADS");
   env.insert("NCCL_LL_BUFFSIZE");
   env.insert("NCCL_LOCAL_REGISTER");
+  env.insert("NCCL_LOGGER_MODE");
   env.insert("NCCL_MAX_CTAS");
   env.insert("NCCL_MAX_NCHANNELS");
   env.insert("NCCL_MAX_NRINGS");
@@ -1015,6 +1018,22 @@ void readCvarEnv() {
 
   NCCL_LOCAL_REGISTER = env2num<int64_t>("NCCL_LOCAL_REGISTER", "1");
   NCCL_LOCAL_REGISTER_DEFAULT = env2num<int64_t>("NCCL_ENV_DO_NOT_SET", "1");
+
+  if (getenv("NCCL_LOGGER_MODE") == nullptr) {
+    NCCL_LOGGER_MODE = NCCL_LOGGER_MODE::none;
+  } else {
+    std::string str(getenv("NCCL_LOGGER_MODE"));
+    if (str == std::string("none")) {
+      NCCL_LOGGER_MODE = NCCL_LOGGER_MODE::none;
+    } else if (str == std::string("sync")) {
+      NCCL_LOGGER_MODE = NCCL_LOGGER_MODE::sync;
+    } else if (str == std::string("async")) {
+      NCCL_LOGGER_MODE = NCCL_LOGGER_MODE::async;
+    } else {
+      CVAR_WARN_UNKNOWN_VALUE("NCCL_LOGGER_MODE", str.c_str());
+    }
+  }
+  NCCL_LOGGER_MODE_DEFAULT = NCCL_LOGGER_MODE::none;
 
   NCCL_MAX_CTAS = env2num<int64_t>("NCCL_MAX_CTAS", "-1");
   NCCL_MAX_CTAS_DEFAULT = env2num<int64_t>("NCCL_ENV_DO_NOT_SET", "-1");
