@@ -1648,6 +1648,40 @@ TEST_F(CvarTest, NCCL_IB_ADAPTIVE_ROUTING_default_value) {
   EXPECT_EQ(NCCL_IB_ADAPTIVE_ROUTING, -2);
 }
 
+TEST_F(CvarTest, NCCL_IB_ADDR_FAMILY_value_0) {
+  setenv("NCCL_IB_ADDR_FAMILY", "val1", 1);
+  ncclCvarInit();
+  EXPECT_EQ(NCCL_IB_ADDR_FAMILY, "val1");
+}
+
+TEST_F(CvarTest, NCCL_IB_ADDR_FAMILY_value_1) {
+  setenv("NCCL_IB_ADDR_FAMILY", "  val2_with_space   ", 1);
+  ncclCvarInit();
+  EXPECT_EQ(NCCL_IB_ADDR_FAMILY, "val2_with_space");
+}
+
+TEST_F(CvarTest, NCCL_IB_ADDR_FAMILY_default_value) {
+  testDefaultValue("NCCL_IB_ADDR_FAMILY");
+  EXPECT_EQ(NCCL_IB_ADDR_FAMILY, "AF_INET");
+}
+
+TEST_F(CvarTest, NCCL_IB_ADDR_RANGE_value_0) {
+  setenv("NCCL_IB_ADDR_RANGE", "val1", 1);
+  ncclCvarInit();
+  EXPECT_EQ(NCCL_IB_ADDR_RANGE, "val1");
+}
+
+TEST_F(CvarTest, NCCL_IB_ADDR_RANGE_value_1) {
+  setenv("NCCL_IB_ADDR_RANGE", "  val2_with_space   ", 1);
+  ncclCvarInit();
+  EXPECT_EQ(NCCL_IB_ADDR_RANGE, "val2_with_space");
+}
+
+TEST_F(CvarTest, NCCL_IB_ADDR_RANGE_default_value) {
+  testDefaultValue("NCCL_IB_ADDR_RANGE");
+  EXPECT_EQ(NCCL_IB_ADDR_RANGE, "::/0");
+}
+
 TEST_F(CvarTest, NCCL_IB_AR_THRESHOLD_value_0) {
   testNumValue<int64_t>("NCCL_IB_AR_THRESHOLD", 0);
   EXPECT_EQ(NCCL_IB_AR_THRESHOLD, 0);
@@ -1694,23 +1728,28 @@ TEST_F(CvarTest, NCCL_IB_DISABLE_value_3) {
 }
 
 TEST_F(CvarTest, NCCL_IB_GID_INDEX_value_0) {
-  testNumValue<int64_t>("NCCL_IB_GID_INDEX", 0);
+  testNumValue<int>("NCCL_IB_GID_INDEX", 0);
   EXPECT_EQ(NCCL_IB_GID_INDEX, 0);
 }
 
 TEST_F(CvarTest, NCCL_IB_GID_INDEX_value_1) {
-  testNumValue<int64_t>("NCCL_IB_GID_INDEX", 9999);
+  testNumValue<int>("NCCL_IB_GID_INDEX", 9999);
   EXPECT_EQ(NCCL_IB_GID_INDEX, 9999);
 }
 
 TEST_F(CvarTest, NCCL_IB_GID_INDEX_value_2) {
-  testNumValue<int64_t>("NCCL_IB_GID_INDEX", std::numeric_limits<int64_t>::max());
-  EXPECT_EQ(NCCL_IB_GID_INDEX, std::numeric_limits<int64_t>::max());
+  testNumValue<int>("NCCL_IB_GID_INDEX", std::numeric_limits<int>::max());
+  EXPECT_EQ(NCCL_IB_GID_INDEX, std::numeric_limits<int>::max());
 }
 
 TEST_F(CvarTest, NCCL_IB_GID_INDEX_value_3) {
-  testNumValue<int64_t>("NCCL_IB_GID_INDEX", std::numeric_limits<int64_t>::min());
-  EXPECT_EQ(NCCL_IB_GID_INDEX, std::numeric_limits<int64_t>::min());
+  testNumValue<int>("NCCL_IB_GID_INDEX", std::numeric_limits<int>::min());
+  EXPECT_EQ(NCCL_IB_GID_INDEX, std::numeric_limits<int>::min());
+}
+
+TEST_F(CvarTest, NCCL_IB_GID_INDEX_default_value) {
+  testDefaultValue("NCCL_IB_GID_INDEX");
+  EXPECT_EQ(NCCL_IB_GID_INDEX, -1);
 }
 
 TEST_F(CvarTest, NCCL_IB_HCA_default_value) {
@@ -1865,6 +1904,31 @@ TEST_F(CvarTest, NCCL_IB_RETRY_CNT_value_3) {
 TEST_F(CvarTest, NCCL_IB_RETRY_CNT_default_value) {
   testDefaultValue("NCCL_IB_RETRY_CNT");
   EXPECT_EQ(NCCL_IB_RETRY_CNT, 7);
+}
+
+TEST_F(CvarTest, NCCL_IB_ROCE_VERSION_NUM_value_0) {
+  testNumValue<int>("NCCL_IB_ROCE_VERSION_NUM", 0);
+  EXPECT_EQ(NCCL_IB_ROCE_VERSION_NUM, 0);
+}
+
+TEST_F(CvarTest, NCCL_IB_ROCE_VERSION_NUM_value_1) {
+  testNumValue<int>("NCCL_IB_ROCE_VERSION_NUM", 9999);
+  EXPECT_EQ(NCCL_IB_ROCE_VERSION_NUM, 9999);
+}
+
+TEST_F(CvarTest, NCCL_IB_ROCE_VERSION_NUM_value_2) {
+  testNumValue<int>("NCCL_IB_ROCE_VERSION_NUM", std::numeric_limits<int>::max());
+  EXPECT_EQ(NCCL_IB_ROCE_VERSION_NUM, std::numeric_limits<int>::max());
+}
+
+TEST_F(CvarTest, NCCL_IB_ROCE_VERSION_NUM_value_3) {
+  testNumValue<int>("NCCL_IB_ROCE_VERSION_NUM", std::numeric_limits<int>::min());
+  EXPECT_EQ(NCCL_IB_ROCE_VERSION_NUM, std::numeric_limits<int>::min());
+}
+
+TEST_F(CvarTest, NCCL_IB_ROCE_VERSION_NUM_default_value) {
+  testDefaultValue("NCCL_IB_ROCE_VERSION_NUM");
+  EXPECT_EQ(NCCL_IB_ROCE_VERSION_NUM, 2);
 }
 
 TEST_F(CvarTest, NCCL_IB_SL_value_0) {

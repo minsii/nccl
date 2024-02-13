@@ -550,6 +550,18 @@ Description:
 Type: int64_t
 Default: -2
 
+NCCL_IB_ADDR_FAMILY
+Description:
+    Choose from AF_INET, AF_INET6, default AF_INET. Hidden variable. No description provided.
+Type: string
+Default: AF_INET
+
+NCCL_IB_ADDR_RANGE
+Description:
+    <ipv6|ipv4>/mask, default ::/0. Hidden variable. No description provided.
+Type: string
+Default: ::/0
+
 NCCL_IB_AR_THRESHOLD
 Description:
     Threshold after which we send InfiniBand data in a separate
@@ -574,8 +586,8 @@ Description:
     in RoCE mode. See the InfiniBand show_gids command in order to
     set this value.  For more information:
     https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/env.html#nccl-ib-gid-index
-Type: int64_t
-Default: 0
+Type: int
+Default: -1
 
 NCCL_IB_HCA
 Description:
@@ -630,6 +642,12 @@ Description:
     https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/env.html#nccl-ib-retry-cnt
 Type: int64_t
 Default: 7
+
+NCCL_IB_ROCE_VERSION_NUM
+Description:
+    Hidden variable. No description provided.
+Type: int
+Default: 2
 
 NCCL_IB_SL
 Description:

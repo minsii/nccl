@@ -29,13 +29,31 @@
 === BEGIN_NCCL_CVAR_INFO_BLOCK ===
 
  - name        : NCCL_IB_GID_INDEX
-   type        : int64_t
-   default     : 0
+   type        : int
+   default     : -1
    description : |-
      The NCCL_IB_GID_INDEX variable defines the Global ID index used
      in RoCE mode. See the InfiniBand show_gids command in order to
      set this value.  For more information:
      https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/env.html#nccl-ib-gid-index
+
+ - name        : NCCL_IB_ROCE_VERSION_NUM
+   type        : int
+   default     : 2
+   description : |-
+     Hidden variable. No description provided.
+
+ - name        : NCCL_IB_ADDR_FAMILY
+   type        : string
+   default     : "AF_INET"
+   description : |-
+     Choose from AF_INET, AF_INET6, default AF_INET. Hidden variable. No description provided.
+
+ - name        : NCCL_IB_ADDR_RANGE
+   type        : string
+   default     : "::/0"
+   description : |-
+     <ipv6|ipv4>/mask, default ::/0. Hidden variable. No description provided.
 
  - name        : NCCL_IB_TIMEOUT
    type        : int64_t
@@ -216,6 +234,223 @@ static void* ncclIbAsyncThreadMain(void* args) {
     if (ncclSuccess != wrap_ibv_ack_async_event(&event)) { break; }
   }
   return NULL;
+}
+
+
+static sa_family_t envIbAddrFamily(void);
+static void* envIbAddrRange(sa_family_t, int*);
+static ncclResult_t ncclUpdateGidIndex(struct ibv_context*, uint8_t, sa_family_t, void*, int, int, int, int*);
+
+static ncclResult_t ncclIbGetGidIndex(struct ibv_context *context, uint8_t portNum, int gidTblLen, int *gidIndex) {
+  *gidIndex = NCCL_IB_GID_INDEX;
+  if (*gidIndex >= 0) {
+    return ncclSuccess;
+  }
+
+  sa_family_t userAddrFamily = envIbAddrFamily();
+  int userRoceVersion = NCCL_IB_ROCE_VERSION_NUM;
+  int ipMaskBits;
+  void *ipAddr = envIbAddrRange(userAddrFamily, &ipMaskBits);
+
+  *gidIndex = 0;
+  for (int gidIndexNext = 1; gidIndexNext < gidTblLen; ++gidIndexNext) {
+    NCCLCHECK(ncclUpdateGidIndex(context, portNum, userAddrFamily, ipAddr, ipMaskBits, userRoceVersion, gidIndexNext, gidIndex));
+  }
+
+  return ncclSuccess;
+}
+
+sa_family_t envIbAddrFamily(void) {
+  sa_family_t family = AF_INET;
+  if (NCCL_IB_ADDR_FAMILY.empty()) {
+    return family;
+  }
+
+  const char* env = NCCL_IB_ADDR_FAMILY.c_str();
+  INFO(NCCL_ENV, "NCCL_IB_ADDR_FAMILY set by environment to %s", env);
+
+  if (strcmp(env, "AF_INET") == 0) {
+    family = AF_INET;
+  } else if (strcmp(env, "AF_INET6") == 0) {
+    family = AF_INET6;
+  }
+
+  return family;
+}
+
+void* envIbAddrRange(sa_family_t af, int* mask) {
+  *mask = 0;
+  static struct in_addr addr;
+  static struct in6_addr addr6;
+  void *ret = (af == AF_INET) ? (void *)&addr : (void *)&addr6;
+
+  if (NCCL_IB_ADDR_RANGE.empty()) {
+    return NULL;
+  }
+
+  const char* env = NCCL_IB_ADDR_RANGE.c_str();
+  INFO(NCCL_ENV, "NCCL_IB_ADDR_RANGE set by environment to %s", env);
+
+  char addrString[128] = { 0 };
+  snprintf(addrString, 128, "%s", env);
+  char *addrStrPtr = addrString;
+  char *maskStrPtr = strstr(addrString, "/") + 1;
+  if (NULL == maskStrPtr) {
+    return NULL;
+  }
+  *(maskStrPtr - 1) = '\0';
+
+  if (inet_pton(af, addrStrPtr, ret) == 0) {
+    WARN("NET/IB: Ip address '%s' is invalid for family %s, ignoring address", addrStrPtr, (af == AF_INET) ? "AF_INET" : "AF_INET6");
+    return NULL;
+  }
+
+  *mask = (int)strtol(maskStrPtr, NULL, 10);
+  if (af == AF_INET && *mask > 32) {
+    WARN("NET/IB: Ip address mask '%d' is invalid for family %s, ignoring mask", *mask, (af == AF_INET) ? "AF_INET" : "AF_INET6");
+    *mask = 0;
+    ret = NULL;
+  } else if (af == AF_INET6 && *mask > 128) {
+    WARN("NET/IB: Ip address mask '%d' is invalid for family %s, ignoring mask", *mask, (af == AF_INET) ? "AF_INET" : "AF_INET6");
+    *mask = 0;
+    ret = NULL;
+  }
+
+  return ret;
+}
+
+static sa_family_t gidToNetAddrFamily(union ibv_gid*);
+static bool gidFitAddrRange(sa_family_t, void*, int, union ibv_gid*);
+static bool gidValid(union ibv_gid*);
+static ncclResult_t ncclIbRoceGetVersionNum(const char*, int, int, int*);
+
+ncclResult_t ncclUpdateGidIndex(struct ibv_context* context, uint8_t portNum, sa_family_t userAddrFam, void* ipAddr, int ipMaskBits, int userRoceVersion, int gidIndexCandidate, int* gidIndex) {
+  union ibv_gid gid, gidCandidate;
+  NCCLCHECK(wrap_ibv_query_gid(context, portNum, *gidIndex, &gid));
+  NCCLCHECK(wrap_ibv_query_gid(context, portNum, gidIndexCandidate, &gidCandidate));
+
+  sa_family_t gidAddrFam = gidToNetAddrFamily(&gid);
+  sa_family_t gidAddrFamCandidate = gidToNetAddrFamily(&gidCandidate);
+
+  bool gidInAddrRange = gidFitAddrRange(userAddrFam, ipAddr, ipMaskBits, &gidCandidate);
+  bool gidAddrFamCandidateMatchUserFam = gidAddrFamCandidate == userAddrFam;
+
+  if (gidAddrFamCandidate != gidAddrFam && gidAddrFamCandidateMatchUserFam && gidInAddrRange) {
+    *gidIndex = gidIndexCandidate;
+  } else {
+    if (!gidAddrFamCandidateMatchUserFam || !gidValid(&gidCandidate) || !gidInAddrRange) {
+      return ncclSuccess;
+    }
+    int gidRoceVerNum, gidRoceVerNumCandidate;
+    const char* deviceName = wrap_ibv_get_device_name(context->device);
+    NCCLCHECK(ncclIbRoceGetVersionNum(deviceName, portNum, *gidIndex, &gidRoceVerNum));
+    NCCLCHECK(ncclIbRoceGetVersionNum(deviceName, portNum, gidIndexCandidate, &gidRoceVerNumCandidate));
+    if ((gidRoceVerNum != gidRoceVerNumCandidate || !gidValid(&gid)) && gidRoceVerNumCandidate == userRoceVersion) {
+      *gidIndex = gidIndexCandidate;
+    }
+  }
+
+  return ncclSuccess;
+}
+
+sa_family_t gidToNetAddrFamily(union ibv_gid* gid) {
+  const struct in6_addr *a = (struct in6_addr *)gid->raw;
+  bool isIpV4Addr = ((a->s6_addr32[0] | a->s6_addr32[1]) | (a->s6_addr32[2] ^ htonl(0x0000ffff))) == 0UL;
+  bool isIpV4MulticastAddr = (a->s6_addr32[0] == htonl(0xff0e0000) && ((a->s6_addr32[1] | (a->s6_addr32[2] ^ htonl(0x0000ffff))) == 0UL));
+  return (isIpV4Addr || isIpV4MulticastAddr) ? AF_INET : AF_INET6;
+}
+
+bool gidFitAddrRange(sa_family_t af, void* ipAddr, int ipMaskBits, union ibv_gid* gid) {
+  struct in_addr *base = NULL;
+  struct in6_addr *base6 = NULL;
+  struct in6_addr *addr6 = NULL;;
+  if (af == AF_INET) {
+    base = (struct in_addr *)ipAddr;
+  } else {
+    base6 = (struct in6_addr *)ipAddr;
+  }
+  addr6 = (struct in6_addr *)gid->raw;
+
+#define NETMASK(bits) (htonl(0xffffffff ^ ((1 << (32 - bits)) - 1)))
+
+  int i = 0;
+  while (ipMaskBits > 0 && i < 4) {
+    if (af == AF_INET) {
+      int mask = NETMASK(ipMaskBits);
+      if ((base->s_addr & mask) ^ (addr6->s6_addr32[3] & mask)) {
+        break;
+      }
+      ipMaskBits = 0;
+      break;
+    } else {
+      if (ipMaskBits >= 32) {
+        if (base6->s6_addr32[i] ^ addr6->s6_addr32[i]) {
+          break;
+        }
+        ipMaskBits -= 32;
+        ++i;
+      } else {
+        int mask = NETMASK(ipMaskBits);
+        if ((base6->s6_addr32[i] & mask) ^ (addr6->s6_addr32[i] & mask)) {
+          break;
+        }
+        ipMaskBits = 0;
+      }
+    }
+  }
+
+  return (ipMaskBits == 0) ? true : false;
+}
+
+static bool gidConfigured(union ibv_gid*);
+static bool gidLinkLocal(union ibv_gid*);
+
+bool gidValid(union ibv_gid* gid) {
+  return (gidConfigured(gid) && !gidLinkLocal(gid));
+}
+
+ncclResult_t ncclIbRoceGetVersionNum(const char* deviceName, int portNum, int gidIndex, int* version) {
+  char gidRoceVerStr[16] = { 0 };
+  char roceTypePath[PATH_MAX] = { 0 };
+  sprintf(roceTypePath, "/sys/class/infiniband/%s/ports/%d/gid_attrs/types/%d", deviceName, portNum, gidIndex);
+
+  int fd = open(roceTypePath, O_RDONLY);
+  if (fd == -1) {
+    return ncclSystemError;
+  }
+  int ret = read(fd, gidRoceVerStr, 15);
+  close(fd);
+
+  if (ret == -1) {
+    return ncclSystemError;
+  }
+
+  if (strlen(gidRoceVerStr)) {
+    if (strncmp(gidRoceVerStr, "IB/RoCE v1", strlen("IB/RoCE v1")) == 0 || strncmp(gidRoceVerStr, "RoCE v1", strlen("RoCE v1")) == 0) {
+      *version = 1;
+    } else if (strncmp(gidRoceVerStr, "RoCE v2", strlen("RoCE v2")) == 0) {
+      *version = 2;
+    }
+  }
+
+  return ncclSuccess;
+}
+
+bool gidConfigured(union ibv_gid* gid) {
+  const struct in6_addr *a = (struct in6_addr *)gid->raw;
+  int trailer = (a->s6_addr32[1] | a->s6_addr32[2] | a->s6_addr32[3]);
+  if (((a->s6_addr32[0] | trailer) == 0UL) || ((a->s6_addr32[0] == htonl(0xfe800000)) && (trailer == 0UL))) {
+    return false;
+  }
+  return true;
+}
+
+bool gidLinkLocal(union ibv_gid* gid) {
+  const struct in6_addr *a = (struct in6_addr *)gid->raw;
+  if (a->s6_addr32[0] == htonl(0xfe800000) && a->s6_addr32[1] == 0UL) {
+    return true;
+  }
+  return false;
 }
 
 static ncclResult_t ncclIbGetPciPath(char* devName, char** path, int* realPort) {
@@ -504,6 +739,7 @@ struct ncclIbGidInfo {
   uint8_t link_layer;
   union ibv_gid localGid;
   union ibv_gid remoteGid;
+  int32_t localGidIndex;
 };
 
 #define NCCL_NET_IB_REQ_UNUSED 0
@@ -667,7 +903,7 @@ ncclResult_t ncclIbCreateQp(uint8_t ib_port, struct ncclIbVerbs* verbs, int acce
   return ncclSuccess;
 }
 
-ncclResult_t ncclIbRtrQp(struct ibv_qp* qp, uint32_t qpn, struct ncclIbQpInfo* info) {
+ncclResult_t ncclIbRtrQp(struct ibv_qp* qp, uint8_t sGidIndex, uint32_t qpn, struct ncclIbQpInfo* info) {
   struct ibv_qp_attr qpAttr;
   memset(&qpAttr, 0, sizeof(struct ibv_qp_attr));
   qpAttr.qp_state = IBV_QPS_RTR;
@@ -681,7 +917,7 @@ ncclResult_t ncclIbRtrQp(struct ibv_qp* qp, uint32_t qpn, struct ncclIbQpInfo* i
     qpAttr.ah_attr.grh.dgid.global.subnet_prefix = info->spn;
     qpAttr.ah_attr.grh.dgid.global.interface_id = info->iid;
     qpAttr.ah_attr.grh.flow_label = 0;
-    qpAttr.ah_attr.grh.sgid_index = NCCL_IB_GID_INDEX;
+    qpAttr.ah_attr.grh.sgid_index = sGidIndex;
     qpAttr.ah_attr.grh.hop_limit = 255;
     qpAttr.ah_attr.grh.traffic_class = NCCL_IB_TC;
   } else {
@@ -782,11 +1018,12 @@ ib_connect_check:
     for (int q=0; q<comm->nqps; q++)
       INFO(NCCL_NET,"NET/IB: Dev %d Port %d qpn %d mtu %d LID %d", dev, ib_port, qpInfo.qpn[q], qpInfo.mtu, qpInfo.lid);
   } else { // RoCE
-    NCCLCHECK(wrap_ibv_query_gid(ctx, ib_port, NCCL_IB_GID_INDEX, &comm->gidInfo.localGid));
+    NCCLCHECK(ncclIbGetGidIndex(ctx, ib_port, portAttr.gid_tbl_len, &comm->gidInfo.localGidIndex));
+    NCCLCHECK(wrap_ibv_query_gid(ctx, ib_port, comm->gidInfo.localGidIndex, &comm->gidInfo.localGid));
     qpInfo.spn = comm->gidInfo.localGid.global.subnet_prefix;
     qpInfo.iid = comm->gidInfo.localGid.global.interface_id;
     for (int q=0; q<comm->nqps; q++)
-      INFO(NCCL_NET,"NET/IB: Dev %d Port %d qpn %d mtu %d GID %ld (%lX/%lX)", dev, ib_port, qpInfo.qpn[q], qpInfo.mtu, NCCL_IB_GID_INDEX, qpInfo.spn, qpInfo.iid);
+      INFO(NCCL_NET,"NET/IB: Dev %d Port %d qpn %d mtu %d GID %ld (%lX/%lX)", dev, ib_port, qpInfo.qpn[q], qpInfo.mtu, (int64_t)comm->gidInfo.localGidIndex, qpInfo.spn, qpInfo.iid);
   }
 
   stage->state = ncclIbCommStateSend;
@@ -814,7 +1051,7 @@ ib_connect:
   comm->gidInfo.remoteGid.global.interface_id = remQpInfo.iid;
   for (int q=0; q<comm->nqps; q++) {
     struct ibv_qp* qp = comm->qps[q];
-    NCCLCHECK(ncclIbRtrQp(qp, remQpInfo.qpn[q], &remQpInfo));
+    NCCLCHECK(ncclIbRtrQp(qp, comm->gidInfo.localGidIndex, remQpInfo.qpn[q], &remQpInfo));
     NCCLCHECK(ncclIbRtsQp(qp));
   }
 
@@ -881,7 +1118,8 @@ ib_recv:
   ib_port = ncclIbDevs[lComm->dev].port;
   struct ibv_port_attr portAttr;
   NCCLCHECK(wrap_ibv_query_port(ctx, ib_port, &portAttr));
-  NCCLCHECK(wrap_ibv_query_gid(ctx, ib_port, NCCL_IB_GID_INDEX, &rComm->gidInfo.localGid));
+  NCCLCHECK(ncclIbGetGidIndex(ctx, ib_port, portAttr.gid_tbl_len, &rComm->gidInfo.localGidIndex));
+  NCCLCHECK(wrap_ibv_query_gid(ctx, ib_port, rComm->gidInfo.localGidIndex, &rComm->gidInfo.localGid));
 
   // QP Creation
   NCCLCHECK(ncclIbInitVerbs(lComm->dev, ctx, &rComm->verbs));
@@ -896,7 +1134,7 @@ ib_recv:
   // Setup QP
   for (int q=0; q<rComm->nqps; q++) {
     struct ibv_qp* qp = rComm->qps[q];
-    NCCLCHECK(ncclIbRtrQp(qp, remQpInfo.qpn[q], &remQpInfo));
+    NCCLCHECK(ncclIbRtrQp(qp, rComm->gidInfo.localGidIndex, remQpInfo.qpn[q], &remQpInfo));
     NCCLCHECK(ncclIbRtsQp(qp));
   }
 
@@ -923,7 +1161,7 @@ ib_recv:
     localQpInfo.spn=rComm->gidInfo.localGid.global.subnet_prefix;
     localQpInfo.iid=rComm->gidInfo.localGid.global.interface_id;
     localQpInfo.mtu=portAttr.active_mtu;
-    NCCLCHECK(ncclIbRtrQp(rComm->gpuFlush.qp, rComm->gpuFlush.qp->qp_num, &localQpInfo));
+    NCCLCHECK(ncclIbRtrQp(rComm->gpuFlush.qp, rComm->gidInfo.localGidIndex, rComm->gpuFlush.qp->qp_num, &localQpInfo));
     NCCLCHECK(ncclIbRtsQp(rComm->gpuFlush.qp));
   }
 
@@ -1493,5 +1731,3 @@ ncclNet_t ncclNetIb = {
   ncclIbCloseRecv,
   ncclIbCloseListen
 };
-
-

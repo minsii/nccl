@@ -335,12 +335,16 @@ std::string NCCL_HOSTID;
 std::string NCCL_HOSTID_DEFAULT;
 int64_t NCCL_IB_ADAPTIVE_ROUTING;
 int64_t NCCL_IB_ADAPTIVE_ROUTING_DEFAULT;
+std::string NCCL_IB_ADDR_FAMILY;
+std::string NCCL_IB_ADDR_FAMILY_DEFAULT;
+std::string NCCL_IB_ADDR_RANGE;
+std::string NCCL_IB_ADDR_RANGE_DEFAULT;
 int64_t NCCL_IB_AR_THRESHOLD;
 int64_t NCCL_IB_AR_THRESHOLD_DEFAULT;
 int64_t NCCL_IB_DISABLE;
 int64_t NCCL_IB_DISABLE_DEFAULT;
-int64_t NCCL_IB_GID_INDEX;
-int64_t NCCL_IB_GID_INDEX_DEFAULT;
+int NCCL_IB_GID_INDEX;
+int NCCL_IB_GID_INDEX_DEFAULT;
 std::string NCCL_IB_HCA_PREFIX;
 std::string NCCL_IB_HCA_PREFIX_DEFAULT;
 std::vector<std::string> NCCL_IB_HCA;
@@ -355,6 +359,8 @@ int64_t NCCL_IB_QPS_PER_CONNECTION;
 int64_t NCCL_IB_QPS_PER_CONNECTION_DEFAULT;
 int64_t NCCL_IB_RETRY_CNT;
 int64_t NCCL_IB_RETRY_CNT_DEFAULT;
+int NCCL_IB_ROCE_VERSION_NUM;
+int NCCL_IB_ROCE_VERSION_NUM_DEFAULT;
 int64_t NCCL_IB_SL;
 int64_t NCCL_IB_SL_DEFAULT;
 int64_t NCCL_IB_SPLIT_DATA_ON_QPS;
@@ -570,6 +576,8 @@ void initEnvSet(std::unordered_set<std::string>& env) {
   env.insert("NCCL_GRAPH_REGISTER");
   env.insert("NCCL_HOSTID");
   env.insert("NCCL_IB_ADAPTIVE_ROUTING");
+  env.insert("NCCL_IB_ADDR_FAMILY");
+  env.insert("NCCL_IB_ADDR_RANGE");
   env.insert("NCCL_IB_AR_THRESHOLD");
   env.insert("NCCL_IB_DISABLE");
   env.insert("NCCL_IB_GID_INDEX");
@@ -579,6 +587,7 @@ void initEnvSet(std::unordered_set<std::string>& env) {
   env.insert("NCCL_IB_PKEY");
   env.insert("NCCL_IB_QPS_PER_CONNECTION");
   env.insert("NCCL_IB_RETRY_CNT");
+  env.insert("NCCL_IB_ROCE_VERSION_NUM");
   env.insert("NCCL_IB_SL");
   env.insert("NCCL_IB_SPLIT_DATA_ON_QPS");
   env.insert("NCCL_IB_TC");
@@ -950,14 +959,20 @@ void readCvarEnv() {
   NCCL_IB_ADAPTIVE_ROUTING = env2num<int64_t>("NCCL_IB_ADAPTIVE_ROUTING", "-2");
   NCCL_IB_ADAPTIVE_ROUTING_DEFAULT = env2num<int64_t>("NCCL_ENV_DO_NOT_SET", "-2");
 
+  NCCL_IB_ADDR_FAMILY = env2str("NCCL_IB_ADDR_FAMILY", "AF_INET");
+  NCCL_IB_ADDR_FAMILY_DEFAULT = env2str("NCCL_ENV_DO_NOT_SET", "AF_INET");
+
+  NCCL_IB_ADDR_RANGE = env2str("NCCL_IB_ADDR_RANGE", "::/0");
+  NCCL_IB_ADDR_RANGE_DEFAULT = env2str("NCCL_ENV_DO_NOT_SET", "::/0");
+
   NCCL_IB_AR_THRESHOLD = env2num<int64_t>("NCCL_IB_AR_THRESHOLD", "8192");
   NCCL_IB_AR_THRESHOLD_DEFAULT = env2num<int64_t>("NCCL_ENV_DO_NOT_SET", "8192");
 
   NCCL_IB_DISABLE = env2num<int64_t>("NCCL_IB_DISABLE", "0");
   NCCL_IB_DISABLE_DEFAULT = env2num<int64_t>("NCCL_ENV_DO_NOT_SET", "0");
 
-  NCCL_IB_GID_INDEX = env2num<int64_t>("NCCL_IB_GID_INDEX", "0");
-  NCCL_IB_GID_INDEX_DEFAULT = env2num<int64_t>("NCCL_ENV_DO_NOT_SET", "0");
+  NCCL_IB_GID_INDEX = env2num<int>("NCCL_IB_GID_INDEX", "-1");
+  NCCL_IB_GID_INDEX_DEFAULT = env2num<int>("NCCL_ENV_DO_NOT_SET", "-1");
 
   std::vector<std::string> NCCL_IB_HCA_allPrefixes{"^", "="};
   NCCL_IB_HCA.clear();
@@ -979,6 +994,9 @@ void readCvarEnv() {
 
   NCCL_IB_RETRY_CNT = env2num<int64_t>("NCCL_IB_RETRY_CNT", "7");
   NCCL_IB_RETRY_CNT_DEFAULT = env2num<int64_t>("NCCL_ENV_DO_NOT_SET", "7");
+
+  NCCL_IB_ROCE_VERSION_NUM = env2num<int>("NCCL_IB_ROCE_VERSION_NUM", "2");
+  NCCL_IB_ROCE_VERSION_NUM_DEFAULT = env2num<int>("NCCL_ENV_DO_NOT_SET", "2");
 
   NCCL_IB_SL = env2num<int64_t>("NCCL_IB_SL", "0");
   NCCL_IB_SL_DEFAULT = env2num<int64_t>("NCCL_ENV_DO_NOT_SET", "0");

@@ -248,14 +248,20 @@ extern std::string NCCL_HOSTID_DEFAULT;
 extern int64_t NCCL_IB_ADAPTIVE_ROUTING;
 extern int64_t NCCL_IB_ADAPTIVE_ROUTING_DEFAULT;
 
+extern std::string NCCL_IB_ADDR_FAMILY;
+extern std::string NCCL_IB_ADDR_FAMILY_DEFAULT;
+
+extern std::string NCCL_IB_ADDR_RANGE;
+extern std::string NCCL_IB_ADDR_RANGE_DEFAULT;
+
 extern int64_t NCCL_IB_AR_THRESHOLD;
 extern int64_t NCCL_IB_AR_THRESHOLD_DEFAULT;
 
 extern int64_t NCCL_IB_DISABLE;
 extern int64_t NCCL_IB_DISABLE_DEFAULT;
 
-extern int64_t NCCL_IB_GID_INDEX;
-extern int64_t NCCL_IB_GID_INDEX_DEFAULT;
+extern int NCCL_IB_GID_INDEX;
+extern int NCCL_IB_GID_INDEX_DEFAULT;
 
 extern std::string NCCL_IB_HCA_PREFIX;
 extern std::string NCCL_IB_HCA_PREFIX_DEFAULT;
@@ -276,6 +282,9 @@ extern int64_t NCCL_IB_QPS_PER_CONNECTION_DEFAULT;
 
 extern int64_t NCCL_IB_RETRY_CNT;
 extern int64_t NCCL_IB_RETRY_CNT_DEFAULT;
+
+extern int NCCL_IB_ROCE_VERSION_NUM;
+extern int NCCL_IB_ROCE_VERSION_NUM_DEFAULT;
 
 extern int64_t NCCL_IB_SL;
 extern int64_t NCCL_IB_SL_DEFAULT;
