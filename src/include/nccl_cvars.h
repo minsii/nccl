@@ -326,7 +326,6 @@ extern int64_t NCCL_LOCAL_REGISTER;
 extern int64_t NCCL_LOCAL_REGISTER_DEFAULT;
 
 enum class NCCL_LOGGER_MODE {
-  none,
   sync,
   async,
 };

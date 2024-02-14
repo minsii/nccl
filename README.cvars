@@ -748,12 +748,11 @@ Default: 1
 NCCL_LOGGER_MODE
 Description:
     The way to log NCCL messages to stdout or specified by NCCL_DEBUG_FILE.
-    none - disable Logger
     sync     - Log NCCL messages synchronously
     async    - Log NCCL messages asynchronously via a background thread
        (for NCCL messages logging file, see also NCCL_DEBUG_FILE)
 Type: enum
-Default: none
+Default: sync
 
 NCCL_MAX_CTAS
 Description:

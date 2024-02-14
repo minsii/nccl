@@ -1,8 +1,6 @@
 // (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
 #include "logger.h"
-// #include <folly/concurrency/UnboundedQueue.h>
-
 #include <stdexcept>
 #include "nccl_cvars.h"
 
@@ -11,11 +9,10 @@
 
  - name        : NCCL_LOGGER_MODE
    type        : enum
-   default     : none
-   choices     : none, sync, async
+   default     : sync
+   choices     : sync, async
    description : |-
      The way to log NCCL messages to stdout or specified by NCCL_DEBUG_FILE.
-     none - disable Logger
      sync     - Log NCCL messages synchronously
      async    - Log NCCL messages asynchronously via a background thread
         (for NCCL messages logging file, see also NCCL_DEBUG_FILE)
@@ -30,14 +27,9 @@ NcclLogger::NcclLogger(FILE* ncclDebugFile)
   }
   debugFile = ncclDebugFile;
 
-  if (NCCL_LOGGER_MODE == NCCL_LOGGER_MODE::async) {
-    writeToFile(
-        "NCCL Logger: instantiate the Asynchronous NCCL message logging.\n");
-    loggerThread_ = std::thread(&NcclLogger::logThreadFunc, this);
-  } else {
-    writeToFile(
-        "NCCL Logger: instantiate the Synchronous NCCL message logging.\n");
-  }
+  writeToFile(
+      "NCCL Logger: instantiate the Asynchronous NCCL message logging.\n");
+  loggerThread_ = std::thread(&NcclLogger::logThreadFunc, this);
 }
 
 void NcclLogger::stop() {

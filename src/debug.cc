@@ -238,7 +238,7 @@ void ncclDebugLog(ncclDebugLogLevel level, unsigned long flags, const char *file
     va_end(vargs);
     buffer[len++] = '\n';
 
-    if (NCCL_LOGGER_MODE == NCCL_LOGGER_MODE::none) {
+    if (NCCL_LOGGER_MODE == NCCL_LOGGER_MODE::sync) {
       fwrite(buffer, 1, len, ncclDebugFile);
     } else {
       NcclLogger::getInstance(ncclDebugFile).log(std::string(buffer, len));

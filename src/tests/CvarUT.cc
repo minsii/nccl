@@ -2214,18 +2214,12 @@ TEST_F(CvarTest, NCCL_LOCAL_REGISTER_default_value) {
 }
 
 TEST_F(CvarTest, NCCL_LOGGER_MODE_single_choice_0) {
-  setenv("NCCL_LOGGER_MODE", "none", 1);
-  ncclCvarInit();
-  EXPECT_EQ(NCCL_LOGGER_MODE, NCCL_LOGGER_MODE::none);
-}
-
-TEST_F(CvarTest, NCCL_LOGGER_MODE_single_choice_1) {
   setenv("NCCL_LOGGER_MODE", "sync", 1);
   ncclCvarInit();
   EXPECT_EQ(NCCL_LOGGER_MODE, NCCL_LOGGER_MODE::sync);
 }
 
-TEST_F(CvarTest, NCCL_LOGGER_MODE_single_choice_2) {
+TEST_F(CvarTest, NCCL_LOGGER_MODE_single_choice_1) {
   setenv("NCCL_LOGGER_MODE", "async", 1);
   ncclCvarInit();
   EXPECT_EQ(NCCL_LOGGER_MODE, NCCL_LOGGER_MODE::async);
@@ -2233,7 +2227,7 @@ TEST_F(CvarTest, NCCL_LOGGER_MODE_single_choice_2) {
 
 TEST_F(CvarTest, NCCL_LOGGER_MODE_default_choice) {
   testDefaultValue("NCCL_LOGGER_MODE");
-  EXPECT_EQ(NCCL_LOGGER_MODE, NCCL_LOGGER_MODE::none);
+  EXPECT_EQ(NCCL_LOGGER_MODE, NCCL_LOGGER_MODE::sync);
 }
 
 TEST_F(CvarTest, NCCL_LOGGER_MODE_warn_unknown_val) {

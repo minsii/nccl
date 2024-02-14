@@ -1038,12 +1038,10 @@ void readCvarEnv() {
   NCCL_LOCAL_REGISTER_DEFAULT = env2num<int64_t>("NCCL_ENV_DO_NOT_SET", "1");
 
   if (getenv("NCCL_LOGGER_MODE") == nullptr) {
-    NCCL_LOGGER_MODE = NCCL_LOGGER_MODE::none;
+    NCCL_LOGGER_MODE = NCCL_LOGGER_MODE::sync;
   } else {
     std::string str(getenv("NCCL_LOGGER_MODE"));
-    if (str == std::string("none")) {
-      NCCL_LOGGER_MODE = NCCL_LOGGER_MODE::none;
-    } else if (str == std::string("sync")) {
+    if (str == std::string("sync")) {
       NCCL_LOGGER_MODE = NCCL_LOGGER_MODE::sync;
     } else if (str == std::string("async")) {
       NCCL_LOGGER_MODE = NCCL_LOGGER_MODE::async;
@@ -1051,7 +1049,7 @@ void readCvarEnv() {
       CVAR_WARN_UNKNOWN_VALUE("NCCL_LOGGER_MODE", str.c_str());
     }
   }
-  NCCL_LOGGER_MODE_DEFAULT = NCCL_LOGGER_MODE::none;
+  NCCL_LOGGER_MODE_DEFAULT = NCCL_LOGGER_MODE::sync;
 
   NCCL_MAX_CTAS = env2num<int64_t>("NCCL_MAX_CTAS", "-1");
   NCCL_MAX_CTAS_DEFAULT = env2num<int64_t>("NCCL_ENV_DO_NOT_SET", "-1");
