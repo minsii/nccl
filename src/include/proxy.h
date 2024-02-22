@@ -14,6 +14,7 @@
 #include <pthread.h>
 #include "shm.h"
 #include "p2p.h"
+#include "ProxyTrace.h"
 
 enum ncclProxyOpState { ncclProxyOpNone, ncclProxyOpReady, ncclProxyOpProgress };
 
@@ -23,7 +24,7 @@ typedef ncclResult_t (*proxyProgressFunc_t)(struct ncclProxyState*, struct ncclP
 #define NCCL_PROXY_MAX_SUBS MAXCHANNELS
 static_assert(NCCL_MAX_WORK_ELEMENTS <= MAXCHANNELS, "Not enough sub space for max work elements");
 
-struct ncclProxyOp {
+struct alignas(64) ncclProxyOp {
   struct ncclProxyConnection* connection;
   int channelId;
   int nsteps;
@@ -40,13 +41,21 @@ struct ncclProxyOp {
   uint8_t /*ncclPattern_t*/ pattern;
   uint8_t protocol;
 
+  uint8_t algorithm;
+  uint64_t commOpCount;
+  int nChannels;
+  uint64_t commHash;
+  ncclFunc_t coll;
+  int rank; // op owner's rank in communicator; may submit to proxy thread belonging to other local rank
+  int remoteRank; // peer's rank in the communicator
+
   union {
     uint64_t unused;
     // For use by enqueue.cc
     struct ncclProxyOp *enqNext;
   };
 };
-static_assert(sizeof(struct ncclProxyOp) == 64, "Keep ProxyOp aligned with cache lines for effective prefetch");
+// static_assert(sizeof(struct ncclProxyOp) == 64, "Keep ProxyOp aligned with cache lines for effective prefetch");
 
 struct ncclProxySubArgs {
   struct ncclProxyConnection* connection;
@@ -83,6 +92,14 @@ struct ncclProxyArgs {
   int state;
   char* sharedBuff[NCCL_STEPS];
   int sharedSize[NCCL_STEPS];
+
+  uint8_t algorithm;
+  uint64_t commOpCount;
+  int nChannels;
+  uint64_t commHash;
+  ncclFunc_t coll;
+  int rank; // op owner's rank in communicator; may submit to proxy thread belonging to other local rank
+  int remoteRank; // peer's rank in the communicator
 
   int idle;
 
@@ -214,6 +231,8 @@ struct ncclProxyState {
 
   // Queue of expected responses from the proxy
   struct ncclExpectedProxyResponse* expectedResponses;
+
+  std::unique_ptr<ProxyTrace> trace{nullptr};
 };
 
 enum proxyConnectState {

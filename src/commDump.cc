@@ -3,6 +3,8 @@
 #include <iterator>
 #include <string>
 #include <unordered_map>
+#include "CtranUtils.h"
+#include "ProxyTrace.h"
 #include "comm.h"
 #include "nccl.h"
 #include "colltrace/CollTrace.h"
@@ -20,6 +22,12 @@ std::string serializeMap(std::unordered_map<std::string, std::string> map) {
   }
   final_string += "}";
   return final_string;
+}
+
+template <typename T>
+std::string serializeVec(std::vector<T> vec) {
+  std::string str = vecToStr(vec);
+  return "[" + str + "]";
 }
 
 std::string serializeList(std::list<std::string> strings) {
@@ -121,7 +129,47 @@ __attribute__((visibility("default"))) ncclResult_t ncclCommDump(
       }
     }
   } else {
-    INFO(NCCL_ALL, "CommDump: No trace to dump");
+    INFO(NCCL_ALL, "CommDump: COLLTRACE is disabled. No trace to dump");
   }
+
+  if (comm->proxyState != nullptr && comm->proxyState->trace) {
+    std::vector<ProxyCollTraceEntry> activeSends;
+    std::vector<ProxyCollTraceEntry> activeRecvs;
+    std::vector<uint64_t> completedColls;
+    size_t nActiveSends =
+        comm->proxyState->trace->queryActiveSends(comm->commHash, activeSends);
+    size_t nActiveRecvs =
+        comm->proxyState->trace->queryActiveRecvs(comm->commHash, activeRecvs);
+
+    size_t nCompletedColls = comm->proxyState->trace->queryCompletedColls(
+        comm->commHash, completedColls);
+
+    INFO(
+        NCCL_ALL,
+        "CommDump: commHash %lu, dumping %zu active sends, %zu active recvs, %zu completed colls",
+        comm->commHash,
+        nActiveSends,
+        nActiveRecvs,
+        nCompletedColls);
+
+    map["PT_nActiveSends"] = std::to_string(nActiveSends);
+    map["PT_nActiveRecvs"] = std::to_string(nActiveRecvs);
+    map["PT_nCompletedColls"] = std::to_string(nCompletedColls);
+    map["PT_completedColls"] = serializeVec(completedColls);
+
+    std::vector<std::string> activeSendsStr;
+    std::vector<std::string> activeRecvsStr;
+    for (auto& entry : activeSends) {
+      activeSendsStr.emplace_back(entry.serialize());
+    }
+    for (auto& entry : activeRecvs) {
+      activeRecvsStr.emplace_back(entry.serialize());
+    }
+    map["PT_activeSends"] = serializeVec(activeSendsStr);
+    map["PT_activeRecvs"] = serializeVec(activeRecvsStr);
+  } else {
+    INFO(NCCL_ALL, "CommDump: PROXYTRACE is disabled. No trace to dump");
+  }
+
   return ncclSuccess;
 }

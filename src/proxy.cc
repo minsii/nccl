@@ -4,6 +4,7 @@
  * See LICENSE.txt for license information
  ************************************************************************/
 
+#include <memory>
 #include "comm.h"
 #include "info.h"
 #include "collectives.h"
@@ -432,6 +433,14 @@ static ncclResult_t ncclProxyOpToArgs(struct ncclProxyOp* op, struct ncclProxyAr
   args->state = ncclProxyOpReady;
   args->progress = op->connection->tcomm->proxyProgress;
   args->proxyAppendPtr = op->connection->proxyAppendPtr;
+  args->commOpCount = op->commOpCount;
+  args->algorithm = op->algorithm;
+  args->coll = op->coll;
+  args->nChannels = op->nChannels;
+  args->rank = op->rank;
+  args->remoteRank = op->remoteRank;
+  args->commHash = op->commHash;
+
   return ncclSuccess;
 }
 
@@ -549,6 +558,9 @@ static ncclResult_t ncclLocalOpAppend(struct ncclComm* comm, struct ncclProxyCon
 
 static ncclResult_t SaveProxy(struct ncclComm* comm, struct ncclChannel* channel, int type, int peer, struct ncclProxyOp* op, int connIndex, bool* justInquire) {
   if (peer < 0) return ncclSuccess;
+
+  // TODO: make sure this is rank in each communicator
+  op->remoteRank = peer;
 
   struct ncclChannelPeer* peerComm = channel->peers[peer];
   struct ncclConnector* connector = type == proxyRecv ? peerComm->recv+connIndex : peerComm->send+connIndex;
@@ -1621,6 +1633,8 @@ ncclResult_t ncclProxyCreate(struct ncclComm* comm) {
     proxyState->dmaBufSupport = comm->dmaBufSupport;
     proxyState->ncclNet = comm->ncclNet;
     proxyState->ncclCollNet = comm->ncclCollNet;
+    NCCLCHECK(proxyTraceInit(proxyState, comm));
+
     memcpy(proxyState->buffSizes, comm->buffSizes, sizeof(comm->buffSizes));
 
     pthread_create(&comm->proxyState->thread, NULL, ncclProxyService, comm->proxyState);

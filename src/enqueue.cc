@@ -442,6 +442,14 @@ static ncclResult_t addP2pToPlan(
   // Calculate the opCount after appendWorkElemP2p since it will always return
   // with channel->nWork equal to one plus the work index this p2p settled in.
   proxyOp.opCount = uint64_t(plan->channels[channelId].nWork)<<1 | 1;
+
+  proxyOp.algorithm = info.algorithm;
+  proxyOp.commHash = info.comm->commHash;
+  proxyOp.commOpCount = info.comm->opCount;
+  proxyOp.coll = info.coll;
+  proxyOp.nChannels = 1; // FIXME: should be 1?
+  proxyOp.rank = info.comm->rank;
+
   NCCLCHECK(addProxyOpIfNeeded(comm, plan, &proxyOp));
   COLLTRACE_P2P_APPEND(comm, plan, info);
   return ncclSuccess;
@@ -1505,6 +1513,13 @@ comp_next:
   // because some protocols need to transmit more than the total size, plus they sometimes
   // round up
   proxyOp->nbytes = stepSize*proxyOp->sliceSteps;
+
+  proxyOp->algorithm = info->algorithm;
+  proxyOp->commHash = info->comm->commHash;
+  proxyOp->commOpCount = info->comm->opCount;
+  proxyOp->coll = info->coll;
+  proxyOp->nChannels = info->nChannels;
+  proxyOp->rank = info->comm->rank;
 
   TRACE(NCCL_COLL,"opCount %lx slicesteps %d spl %d cpl %d nbytes %zi -> protocol %d nchannels %d nthreads %d, nloops %d nsteps %d chunksize %d comm %p",
       proxyOp->opCount, sliceSteps, info->nstepsPerLoop, info->nchunksPerLoop, info->nBytes, info->protocol, info->nChannels, info->nThreads,

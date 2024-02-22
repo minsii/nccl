@@ -11,6 +11,8 @@ class MPIEnvironment : public ::testing::Environment {
   void SetUp() override {
     initializeMpi(0, NULL);
     setenv("NCCL_DEBUG", "WARN", 0);
+    setenv("NCCL_COLLTRACE", "trace", 0);
+    setenv("NCCL_PROXYTRACE", "trace", 0);
   }
   void TearDown() override {
     finalizeMpi();
@@ -68,6 +70,13 @@ TEST_F(CommDumpTest, SingleComm) {
 
   EXPECT_EQ(dump.count("commHash"), 1);
   EXPECT_EQ(dump["commHash"], std::to_string(this->comm->commHash));
+
+  if (this->globalRank == 0) {
+    printf("Dump on rank 0:\n");
+    for (auto& it : dump) {
+      printf("%s: %s\n", it.first.c_str(), it.second.c_str());
+    }
+  }
 }
 
 TEST_F(CommDumpTest, DumpAfterColl) {
@@ -88,12 +97,30 @@ TEST_F(CommDumpTest, DumpAfterColl) {
   }
   CUDACHECK_TEST(cudaStreamSynchronize(this->stream));
 
-  // NOTE: the last 8 steps of the last collective may still ongoing on proxy thread
+  // NOTE: the last 8 steps of the last collective may still ongoing on proxy
+  // thread
   res = ncclCommDump(this->comm, dump);
   ASSERT_EQ(res, ncclSuccess);
 
   EXPECT_EQ(dump.count("commHash"), 1);
   EXPECT_EQ(dump["commHash"], std::to_string(this->comm->commHash));
+
+  if (comm->nNodes > 1) {
+    // PROXYTRACE is enabled only when nNodes > 1
+    EXPECT_EQ(dump.count("PT_nCompletedColls"), 1);
+    EXPECT_EQ(dump.count("PT_nActiveSends"), 1);
+    EXPECT_EQ(dump.count("PT_nActiveRecvs"), 1);
+    EXPECT_EQ(dump.count("PT_activeSends"), 1);
+    EXPECT_EQ(dump.count("PT_activeRecvs"), 1);
+    EXPECT_EQ(dump.count("PT_completedColls"), 1);
+  }
+
+  if (this->globalRank == 0) {
+    printf("Dump on rank 0:\n");
+    for (auto& it : dump) {
+      printf("%s: %s\n", it.first.c_str(), it.second.c_str());
+    }
+  }
 }
 
 TEST_F(CommDumpTest, DumpDuringColl) {
@@ -113,6 +140,9 @@ TEST_F(CommDumpTest, DumpDuringColl) {
         this->stream));
   }
 
+  // let's wait proxy thread to hang
+  sleep(5);
+
   // Dump before waiting completion
   // TODO: add backdoor to control which collective to hang; without it, we may
   // dump arbitrary collective
@@ -121,6 +151,25 @@ TEST_F(CommDumpTest, DumpDuringColl) {
 
   EXPECT_EQ(dump.count("commHash"), 1);
   EXPECT_EQ(dump["commHash"], std::to_string(this->comm->commHash));
+
+  if (comm->nNodes > 1) {
+    // PROXYTRACE is enabled only when nNodes > 1
+    EXPECT_EQ(dump.count("PT_nCompletedColls"), 1);
+    EXPECT_EQ(dump.count("PT_nActiveSends"), 1);
+    EXPECT_EQ(dump.count("PT_nActiveRecvs"), 1);
+    EXPECT_EQ(dump.count("PT_activeSends"), 1);
+    EXPECT_EQ(dump.count("PT_activeRecvs"), 1);
+    EXPECT_EQ(dump.count("PT_completedColls"), 1);
+  }
+
+  printf("Dump on rank %d:\n", this->globalRank);
+  for (auto& it : dump) {
+    printf(
+        "rank %d %s: %s\n",
+        this->globalRank,
+        it.first.c_str(),
+        it.second.c_str());
+  }
 
   CUDACHECK_TEST(cudaStreamSynchronize(this->stream));
 }

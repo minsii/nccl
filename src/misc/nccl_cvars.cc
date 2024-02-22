@@ -465,6 +465,8 @@ int64_t NCCL_PROGRESS_APPENDOP_FREQ;
 int64_t NCCL_PROGRESS_APPENDOP_FREQ_DEFAULT;
 std::string NCCL_PROTO;
 std::string NCCL_PROTO_DEFAULT;
+std::vector<std::string> NCCL_PROXYTRACE;
+std::vector<std::string> NCCL_PROXYTRACE_DEFAULT;
 int64_t NCCL_PROXY_APPEND_BATCH_SIZE;
 int64_t NCCL_PROXY_APPEND_BATCH_SIZE_DEFAULT;
 int64_t NCCL_PROXY_DUMP_SIGNAL;
@@ -642,6 +644,7 @@ void initEnvSet(std::unordered_set<std::string>& env) {
   env.insert("NCCL_P2P_USE_CUDA_MEMCPY");
   env.insert("NCCL_PROGRESS_APPENDOP_FREQ");
   env.insert("NCCL_PROTO");
+  env.insert("NCCL_PROXYTRACE");
   env.insert("NCCL_PROXY_APPEND_BATCH_SIZE");
   env.insert("NCCL_PROXY_DUMP_SIGNAL");
   env.insert("NCCL_PROXY_PROFILE");
@@ -1180,6 +1183,11 @@ void readCvarEnv() {
 
   NCCL_PROTO = env2str("NCCL_PROTO", "");
   NCCL_PROTO_DEFAULT = env2str("NCCL_ENV_DO_NOT_SET", "");
+
+  NCCL_PROXYTRACE.clear();
+  NCCL_PROXYTRACE = env2strlist("NCCL_PROXYTRACE", "");
+  NCCL_PROXYTRACE_DEFAULT.clear();
+  NCCL_PROXYTRACE_DEFAULT = env2strlist("NCCL_ENV_DO_NOT_SET", "");
 
   NCCL_PROXY_APPEND_BATCH_SIZE = env2num<int64_t>("NCCL_PROXY_APPEND_BATCH_SIZE", "16");
   NCCL_PROXY_APPEND_BATCH_SIZE_DEFAULT = env2num<int64_t>("NCCL_ENV_DO_NOT_SET", "16");

@@ -1094,6 +1094,16 @@ Description:
 Type: string
 Default: 
 
+NCCL_PROXYTRACE
+Description:
+    Enable proxy operation trace collection on the proxy thread. Valid options
+    are comma separated list of the following features. Leave empty to disable
+    all features.
+    verbose - print every proxy operation step as NCCL INFO log.
+    query - trace all steps and allow ncclCommDump to query all records.
+Type: stringlist
+Default: None
+
 NCCL_PROXY_APPEND_BATCH_SIZE
 Description:
     Hidden variable. No description provided.
