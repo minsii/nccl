@@ -9,7 +9,7 @@
 
 int main(int argc, char* argv[])
 {
-  int size = 32*1024*1024;
+  int size = 32*1024;
 
   int localRank, globalRank, numRanks;
 
@@ -23,9 +23,15 @@ int main(int argc, char* argv[])
   CUDACHECK_TEST(cudaMalloc(&recvbuff, size * sizeof(float)));
   CUDACHECK_TEST(cudaStreamCreate(&s));
 
-  //communicating using NCCL
-  NCCLCHECK_TEST(ncclAllReduce((const void*)sendbuff, (void*)recvbuff, size, ncclFloat, ncclSum,
-        comm, s));
+  for (int x = 0; x < 32; x++) {
+    //communicating using NCCL
+    NCCLCHECK_TEST(ncclAllReduce((const void*)sendbuff, (void*)recvbuff, size, ncclFloat, ncclSum,
+          comm, s));
+  }
+
+  for (int x = 0; x < 32; x++) {
+    NCCLCHECK_TEST(ncclAllToAll(sendbuff, recvbuff, size/2, ncclFloat, comm, s));
+  }
 
   //completing NCCL operation by synchronizing on the CUDA stream
   CUDACHECK_TEST(cudaStreamSynchronize(s));

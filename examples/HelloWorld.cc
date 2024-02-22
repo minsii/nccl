@@ -23,6 +23,18 @@ int main(int argc, char* argv[]) {
   NCCLCHECK(ncclAllReduce(
       (const void*)userBuff, userBuff, count, ncclInt, ncclSum, comm, stream));
 
+#ifdef NCCL_COMM_DUMP
+  std::unordered_map<std::string, std::string> dump;
+  NCCLCHECK(ncclCommDump(comm, dump));
+  for (auto& it : dump) {
+    printf(
+        "Dump from comm %p %s: %s\n",
+        comm,
+        it.first.c_str(),
+        it.second.c_str());
+  }
+#endif
+
   CUDACHECK(cudaFree(userBuff));
   CUDACHECK(cudaSetDevice(localRank));
   CUDACHECK(cudaStreamDestroy(stream));

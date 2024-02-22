@@ -43,6 +43,7 @@ LIBSRCFILES += algorithms/AlgoDirector.cc \
                algorithms/allreduce/AlgoManagerAllReduce.cc
 LIBSRCFILES += collectives/all_to_allv.cc collectives/all_to_all.cc
 LIBSRCFILES += window.cc
+LIBSRCFILES += commDump.cc
 
 INCLUDES := -Iinclude
 INCLUDES += -Ialgorithms -Ialgorithms/allreduce
