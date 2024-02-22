@@ -51,6 +51,16 @@ class CollTraceTest : public ::testing::Test {
     CUDACHECK_TEST(cudaMalloc(&recvBuf, count * sizeof(int)));
   }
 
+  void prepareAllToAll(const int count) {
+    CUDACHECK_TEST(cudaMalloc(&sendBuf, count * this->numRanks * sizeof(int)));
+    CUDACHECK_TEST(cudaMalloc(&recvBuf, count * this->numRanks * sizeof(int)));
+  }
+
+  void prepareSendRecv(const int count) {
+    CUDACHECK_TEST(cudaMalloc(&sendBuf, count * sizeof(int)));
+    CUDACHECK_TEST(cudaMalloc(&recvBuf, count * sizeof(int)));
+  }
+
  protected:
   int localRank{0};
   int globalRank{0};
@@ -83,6 +93,107 @@ TEST_F(CollTraceTest, VerboseAllReduce) {
   for (int i = 0; i < nColl; i++) {
     std::stringstream ss;
     ss << "COLLTRACE: opCount " << std::hex << i << " AllReduce";
+    std::string traceLog = ss.str();
+    EXPECT_THAT(output, testing::HasSubstr(traceLog));
+  }
+  NCCL_COLLTRACE.clear();
+}
+
+TEST_F(CollTraceTest, VerboseAllToAll) {
+  // overwrite CollTrace features before creating comm
+  NCCL_COLLTRACE.push_back("verbose");
+  ncclComm_t comm =
+      createNcclComm(this->globalRank, this->numRanks, this->localRank);
+  const int count = 1048576;
+  const int nColl = 10;
+
+  testing::internal::CaptureStdout();
+
+  prepareAllToAll(count);
+  for (int i = 0; i < nColl; i++) {
+    NCCLCHECK_TEST(
+        ncclAllToAll(sendBuf, recvBuf, count, ncclInt, comm, stream));
+  }
+  CUDACHECK_TEST(cudaStreamSynchronize(stream));
+  NCCLCHECK_TEST(ncclCommDestroy(comm));
+
+  std::string output = testing::internal::GetCapturedStdout();
+  for (int i = 0; i < nColl; i++) {
+    std::stringstream ss;
+    ss << "COLLTRACE: opCount " << std::hex << i << " SendRecv";
+    std::string traceLog = ss.str();
+    EXPECT_THAT(output, testing::HasSubstr(traceLog));
+  }
+  NCCL_COLLTRACE.clear();
+}
+
+TEST_F(CollTraceTest, VerboseSendRecv) {
+  // overwrite CollTrace features before creating comm
+  NCCL_COLLTRACE.push_back("verbose");
+  ncclComm_t comm =
+      createNcclComm(this->globalRank, this->numRanks, this->localRank);
+  const int count = 1048576;
+  const int nColl = 10;
+
+  testing::internal::CaptureStdout();
+
+  prepareSendRecv(count);
+  int peer = (this->globalRank + 1) % this->numRanks;
+  for (int i = 0; i < nColl; i++) {
+    NCCLCHECK_TEST(ncclGroupStart());
+    NCCLCHECK_TEST(ncclSend(sendBuf, count, ncclInt, peer, comm, stream));
+    NCCLCHECK_TEST(ncclRecv(recvBuf, count, ncclInt, peer, comm, stream));
+    NCCLCHECK_TEST(ncclGroupEnd());
+  }
+  CUDACHECK_TEST(cudaStreamSynchronize(stream));
+  NCCLCHECK_TEST(ncclCommDestroy(comm));
+
+  std::string output = testing::internal::GetCapturedStdout();
+  for (int i = 0; i < nColl; i++) {
+    std::stringstream ss;
+    ss << "COLLTRACE: opCount " << std::hex << i << " SendRecv";
+    std::string traceLog = ss.str();
+    EXPECT_THAT(output, testing::HasSubstr(traceLog));
+  }
+  NCCL_COLLTRACE.clear();
+}
+
+TEST_F(CollTraceTest, VerboseSendOrRecv) {
+  if (this->numRanks % 2) {
+    GTEST_SKIP() << "This test requires even number of ranks";
+  }
+
+  // overwrite CollTrace features before creating comm
+  NCCL_COLLTRACE.push_back("verbose");
+  ncclComm_t comm =
+      createNcclComm(this->globalRank, this->numRanks, this->localRank);
+  const int count = 1048576;
+  const int nColl = 10;
+
+  testing::internal::CaptureStdout();
+
+  prepareSendRecv(count);
+  for (int i = 0; i < nColl; i++) {
+    // even rank sends to odd rank (e.g, 0->1, 2->3)
+    if (this->globalRank % 2 == 0) {
+      int peer = this->globalRank + 1;
+      NCCLCHECK_TEST(ncclSend(sendBuf, count, ncclInt, peer, comm, stream));
+    } else {
+      int peer = this->globalRank - 1;
+      NCCLCHECK_TEST(ncclRecv(recvBuf, count, ncclInt, peer, comm, stream));
+    }
+  }
+  CUDACHECK_TEST(cudaStreamSynchronize(stream));
+  NCCLCHECK_TEST(ncclCommDestroy(comm));
+
+  std::string output = testing::internal::GetCapturedStdout();
+  for (int i = 0; i < nColl; i++) {
+    std::stringstream ss;
+    if (this->globalRank % 2 == 0) {
+      ss << "COLLTRACE: opCount " << std::hex << i << " Send";
+    } else {
+      ss << "COLLTRACE: opCount " << std::hex << i << " Recv";
+    }
     std::string traceLog = ss.str();
     EXPECT_THAT(output, testing::HasSubstr(traceLog));
   }

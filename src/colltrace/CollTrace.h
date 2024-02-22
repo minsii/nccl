@@ -161,16 +161,32 @@ ncclResult_t collTraceDestroy(ncclComm* comm);
     }                                                     \
   } while (0)
 
-#define COLLTRACE_ACQUIRE_EVENT(comm, plan)               \
-  std::unique_ptr<EventInfo> eventInfo = nullptr;         \
-  do {                                                    \
-    if (comm->collTrace) {                                \
-      eventInfo = comm->collTrace->getEventFromPool();    \
-      if (!eventInfo) {                                   \
-        return ncclInternalError; /*Event init failed*/   \
-      }                                                   \
-      eventInfo->iteration = ncclFbGetTrainerIteration(); \
-    }                                                     \
+#define COLLTRACE_P2P_APPEND(comm, plan, info)           \
+  do {                                                   \
+    if (comm->collTrace) {                               \
+      if (info.coll == ncclFuncSend && info.count > 0) { \
+        plan->nSendBytes += info.count;                  \
+      } else {                                           \
+        plan->nRecvBytes += info.count;                  \
+      }                                                  \
+    }                                                    \
+  } while (0)
+
+#define COLLTRACE_ACQUIRE_EVENT(comm, plan)                                           \
+  std::unique_ptr<EventInfo> eventInfo = nullptr;                                     \
+  do {                                                                                \
+    if (comm->collTrace) {                                                            \
+      if (plan->aggInfo.count > 0 && (plan->nSendBytes || plan->nRecvBytes)) {        \
+        WARN(                                                                         \
+            "COLLTRACE: do not support grouped collective and p2p. Skip this plan."); \
+      } else {                                                                        \
+        eventInfo = comm->collTrace->getEventFromPool();                              \
+        if (!eventInfo) {                                                             \
+          return ncclInternalError; /*Event init failed*/                             \
+        }                                                                             \
+        eventInfo->iteration = ncclFbGetTrainerIteration();                           \
+      }                                                                               \
+    }                                                                                 \
   } while (0)
 
 #define COLLTRACE_RECORD_START_EVENT(comm, launchStream)                \
@@ -185,7 +201,32 @@ ncclResult_t collTraceDestroy(ncclComm* comm);
     if (comm->collTrace && eventInfo) {                                \
       CUDACHECK(cudaEventRecord(eventInfo->stop.get(), launchStream)); \
       eventInfo->opCount = comm->opCount;                              \
-      eventInfo->info = plan->aggInfo;                                 \
+      /* single or grouped collective */                               \
+      if (plan->aggInfo.count > 0) {                                   \
+        eventInfo->info = plan->aggInfo;                               \
+      } else { /*groupd p2p */                                         \
+        if (plan->nSendBytes && plan->nRecvBytes) {                    \
+          eventInfo->info.opName = "SendRecv";                         \
+          eventInfo->info.coll = ncclFuncSendRecv;                     \
+        } else if (plan->nSendBytes) {                                 \
+          eventInfo->info.opName = "Send";                             \
+          eventInfo->info.coll = ncclFuncSend;                         \
+        } else if (plan->nRecvBytes) {                                 \
+          eventInfo->info.opName = "Recv";                             \
+          eventInfo->info.coll = ncclFuncRecv;                         \
+        }                                                              \
+        eventInfo->info.sendbuff = eventInfo->info.recvbuff = nullptr; \
+        eventInfo->info.count = plan->nSendBytes + plan->nRecvBytes;   \
+        eventInfo->info.datatype = ncclInt8;                           \
+        eventInfo->info.root = -1;                                     \
+        eventInfo->info.op = ncclSum;                                  \
+        /* FIXME: cannot record protocol for sendrecvs since a grouped \
+         * sendrecv may contain multiple protocols */                  \
+        eventInfo->info.algorithm = -1;                                \
+        eventInfo->info.protocol = -1;                                 \
+        eventInfo->info.nChannels = plan->channelCount;                \
+        eventInfo->info.nThreads = plan->threadPerBlock;               \
+      }                                                                \
       eventInfo->stream = launchStream;                                \
       comm->collTrace->enqueueEvent(std::move(eventInfo));             \
     }                                                                  \
