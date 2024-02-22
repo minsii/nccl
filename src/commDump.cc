@@ -3,7 +3,7 @@
 #include <iterator>
 #include <string>
 #include <unordered_map>
-#include "CtranUtils.h"
+#include "ExtUtils.h"
 #include "ProxyTrace.h"
 #include "comm.h"
 #include "nccl.h"

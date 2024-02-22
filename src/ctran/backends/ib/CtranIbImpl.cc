@@ -10,7 +10,7 @@
 #include "CtranIb.h"
 #include "CtranIbImpl.h"
 #include "CtranIbVc.h"
-#include "CtranUtils.h"
+#include "ExtUtils.h"
 #include "CtranChecks.h"
 
 void CtranIb::Impl::bootstrapAccept(CtranIb::Impl *pimpl) {

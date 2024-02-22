@@ -7,7 +7,7 @@
 #include "comm.h"
 #include "nccl.h"
 
-#include <CtranUtils.h>
+#include <ExtUtils.h>
 #include <unistd.h>
 #include <chrono>
 #include <fstream>
@@ -131,7 +131,7 @@ void CollTrace::outputResults() {
 }
 
 CollTrace::CollTraceDump CollTrace::dumpTrace() {
-  CollTraceDump dump {};
+  CollTraceDump dump{};
   if (curEvent_ != nullptr) {
     dump.currentEvent = curEvent_;
     dump.currentEventState = curEventState_;
@@ -246,7 +246,7 @@ void* CollTrace::collTraceThreadFnImpl() {
               curEvent_->info.nThreads);
         }
       }
-    curEvent_ = nullptr;
+      curEvent_ = nullptr;
     } else {
       if (workerThreadExitSignal_ && eventQueue_.isEmpty()) {
         outputResults();
