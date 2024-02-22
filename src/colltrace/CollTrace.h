@@ -4,6 +4,7 @@
 
 #include <atomic>
 #include <list>
+#include <memory>
 #include <mutex>
 #include <queue>
 #include <thread>
@@ -23,6 +24,12 @@ struct CudaEventDeleter {
 using CudaEventPtr = std::unique_ptr<
     std::pointer_traits<cudaEvent_t>::element_type,
     CudaEventDeleter>;
+
+enum class EventState {
+  PENDING,
+  RUNNING,
+  FINISHED,
+};
 
 // Event data structure
 struct EventInfo {
@@ -87,6 +94,13 @@ class CollTrace {
   CollTrace(ncclComm* comm);
   ~CollTrace();
 
+  struct CollTraceDump {
+    std::list<ResultInfo> pastResults;
+    std::queue<std::unique_ptr<EventInfo>> pendingEvents;
+    std::shared_ptr<EventInfo> currentEvent;
+    EventState currentEventState {EventState::PENDING};
+  };
+
  private:
   // Work queue data structure
   class EventQueue {
@@ -95,6 +109,14 @@ class CollTrace {
     std::mutex mutex_;
 
    public:
+    std::queue<std::unique_ptr<EventInfo>> dumpQueue() {
+      std::queue<std::unique_ptr<EventInfo>> tmp {};
+      {
+        std::lock_guard<std::mutex> lock(mutex_);
+        queue_.swap(tmp);
+      }
+      return tmp;
+    }
     void push(std::unique_ptr<EventInfo> item) {
       std::lock_guard<std::mutex> lock(mutex_);
       queue_.push(std::move(item));
@@ -124,6 +146,10 @@ class CollTrace {
   // cudaEvent pool to avoid cudaEvent destory during run and enable reuse.
   SharedPool eventPool_;
   EventQueue eventQueue_;
+  // Using shared ptr to avoid race condition when worker thread is exiting
+  // while we are trying to dump results in collDump.
+  std::shared_ptr<EventInfo> curEvent_;
+  std::atomic<EventState> curEventState_{EventState::PENDING};
   std::list<ResultInfo> results_;
   std::atomic<bool> workerThreadExitSignal_{false};
 
@@ -136,8 +162,11 @@ class CollTrace {
     FILE = 2,
     FB_IO_DURING_RUN = 4,
     ONLINE_TUNING = 8,
+    TRACE = 16,
   };
   int features{0}; // bitwise OR of Features
+
+  CollTraceDump dumpTrace();
 
   // Internal function called in collTraceThreadFn for worker thread to access
   // private members

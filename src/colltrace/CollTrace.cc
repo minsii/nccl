@@ -24,6 +24,7 @@
      and a background thread. Valid options are comma separated list
      of the following features. Leave empty to disable all features.
      verbose - print every completed event as NCCL INFO log. Mostly for debug.
+     trace - Just enable collective trace.
      file    - dump traced events to file at communicator destory. Also see
             NCCL_COLLTRACE_DIR.
      online_tuning - enable online tuning
@@ -54,6 +55,9 @@ CollTrace::CollTrace(ncclComm* comm) : comm_(comm) {
         enabledFeatures.push_back(f);
       } else if (f == "fb") {
         features |= CollTrace::Features::FB_IO_DURING_RUN;
+        enabledFeatures.push_back(f);
+      } else if (f == "trace") {
+        features |= CollTrace::Features::TRACE;
         enabledFeatures.push_back(f);
       }
     }
@@ -126,6 +130,20 @@ void CollTrace::outputResults() {
   }
 }
 
+CollTrace::CollTraceDump CollTrace::dumpTrace() {
+  CollTraceDump dump {};
+  if (curEvent_ != nullptr) {
+    dump.currentEvent = curEvent_;
+    dump.currentEventState = curEventState_;
+  }
+
+  dump.pendingEvents = eventQueue_.dumpQueue();
+  // For now we will assume the collTraceThread is either finished or hang.
+  // TODO: add a lock to protect the dump process.
+  dump.pastResults = results_;
+  return dump;
+}
+
 void* CollTrace::collTraceThreadFn(CollTrace* ct) {
   return ct->collTraceThreadFnImpl();
 }
@@ -142,28 +160,34 @@ void* CollTrace::collTraceThreadFnImpl() {
       comm_->rank);
 
   while (true) {
-    std::unique_ptr<EventInfo> curEvent = eventQueue_.tryPop();
-    if (curEvent) {
-      if (curEvent->info.count != 0) {
-        cudaError_t res = cudaEventSynchronize(curEvent->stop.get());
+    curEvent_ = eventQueue_.tryPop();
+    // Fixme: think of a better word to describe the state of the current event
+    // here we are actually "uncertain" what is the current state of the event
+    // rather than we know the event is waiting to be processed.
+    curEventState_ = EventState::PENDING;
+    if (curEvent_) {
+      if (curEvent_->info.count != 0) {
+        curEventState_ = EventState::RUNNING;
+        cudaError_t res = cudaEventSynchronize(curEvent_->stop.get());
+        curEventState_ = EventState::FINISHED;
         float latency = -1;
         res = res == cudaSuccess
             ? cudaEventElapsedTime(
-                  &latency, curEvent->start.get(), curEvent->stop.get())
+                  &latency, curEvent_->start.get(), curEvent_->stop.get())
             : res;
         ResultInfo result;
-        result.opCount = curEvent->opCount;
-        result.info = curEvent->info;
-        result.stream = curEvent->stream;
+        result.opCount = curEvent_->opCount;
+        result.info = curEvent_->info;
+        result.stream = curEvent_->stream;
         if (res == cudaSuccess) {
           result.latency = latency;
         }
-        result.iteration = curEvent->iteration;
+        result.iteration = curEvent_->iteration;
         results_.push_back(result);
 
         // Free the event objects
-        eventPool_.add(std::move(curEvent->start));
-        eventPool_.add(std::move(curEvent->stop));
+        eventPool_.add(std::move(curEvent_->start));
+        eventPool_.add(std::move(curEvent_->stop));
 
         // FIXME: cannot record protocol for sendrecvs since a grouped sendrecv
         // may contain multiple protocols
@@ -199,29 +223,30 @@ void* CollTrace::collTraceThreadFnImpl() {
             features & CollTrace::Features::ONLINE_TUNING) {
           // Online tuning - average latencies across ranks & send to tuner
           float* latencies = NULL;
-          NCCLCHECKIGNORE(ncclCalloc(&latencies, curEvent->info.comm->nRanks));
-          latencies[curEvent->info.comm->rank] = latency;
+          NCCLCHECKIGNORE(ncclCalloc(&latencies, curEvent_->info.comm->nRanks));
+          latencies[curEvent_->info.comm->rank] = latency;
           NCCLCHECKIGNORE(bootstrapAllGather(
-              curEvent->info.comm->bootstrap, latencies, sizeof(float)));
+              curEvent_->info.comm->bootstrap, latencies, sizeof(float)));
           float sum = 0.0;
-          for (int i = 0; i < curEvent->info.comm->nRanks; i++) {
+          for (int i = 0; i < curEvent_->info.comm->nRanks; i++) {
             sum += latencies[i];
           }
 
           free(latencies);
-          sum /= (float)curEvent->info.comm->nRanks;
+          sum /= (float)curEvent_->info.comm->nRanks;
 
-          curEvent->info.comm->tuner->addOnlineResult(
-              curEvent->info.coll,
-              curEvent->info.count * ncclTypeSize(curEvent->info.datatype),
-              curEvent->iteration,
+          curEvent_->info.comm->tuner->addOnlineResult(
+              curEvent_->info.coll,
+              curEvent_->info.count * ncclTypeSize(curEvent_->info.datatype),
+              curEvent_->iteration,
               sum,
-              curEvent->info.algorithm,
-              curEvent->info.protocol,
-              curEvent->info.nChannels,
-              curEvent->info.nThreads);
+              curEvent_->info.algorithm,
+              curEvent_->info.protocol,
+              curEvent_->info.nChannels,
+              curEvent_->info.nThreads);
         }
       }
+    curEvent_ = nullptr;
     } else {
       if (workerThreadExitSignal_ && eventQueue_.isEmpty()) {
         outputResults();
