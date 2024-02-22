@@ -79,6 +79,22 @@ std::string serializeEvents(std::queue<std::unique_ptr<EventInfo>>& events) {
   return serializeList(serializedEvents);
 }
 
+std::string serializeRing(int* userRanks, int nRank) {
+  std::list <std::string> ringList;
+  for (int i = 0; i < nRank; i++) {
+    ringList.emplace_back(std::to_string(userRanks[i]));
+  }
+  return serializeList(ringList);
+}
+
+std::string serializeRings(ncclComm_t comm) {
+  std::list<std::string> serializedRings;
+  for (int i = 0; i < comm->nChannels; i++) {
+    serializedRings.emplace_back(serializeRing(comm->channels[i].ring.userRanks, comm->nRanks));
+  }
+  return serializeList(serializedRings);
+}
+
 __attribute__((visibility("default"))) ncclResult_t ncclCommDump(
     ncclComm_t comm,
     std::unordered_map<std::string, std::string>& map) {
@@ -98,6 +114,11 @@ __attribute__((visibility("default"))) ncclResult_t ncclCommDump(
       auto infoMap = retrieveNCCLInfoMap(traceDump.currentEvent->info);
       infoMap["opCount"] = std::to_string(traceDump.currentEvent->opCount);
       map["CT_currentEvent"] = serializeMap(infoMap);
+      auto algorithm = traceDump.currentEvent->info.algorithm;
+      auto channelId = traceDump.currentEvent->info.channelId;
+      if (algorithm == NCCL_ALGO_RING) {
+        map["CT_currentRing"]= serializeRing(comm->channels[channelId].ring.userRanks, comm->nRanks);
+      }
     }
   } else {
     INFO(NCCL_ALL, "CommDump: No trace to dump");
