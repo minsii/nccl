@@ -206,6 +206,80 @@ TEST_F(ProxyTraceTest, QueryAllReduce) {
   NCCL_PROXYTRACE.clear();
 }
 
+TEST_F(ProxyTraceTest, QueryHangAllReduce) {
+  constexpr int hangChannelId = 1;
+  constexpr int hangRank = 1;
+  constexpr int hangRemoteRank = 0;
+  constexpr int hangOpCount = 5;
+  constexpr int hangOpStep = 1;
+
+  // overwrite ProxyTrace features before creating comm
+  NCCL_PROXYTRACE.push_back("trace");
+  NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK.push_back(std::to_string(hangOpCount));
+  NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK.push_back(
+      std::to_string(hangChannelId));
+  NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK.push_back(std::to_string(hangRank));
+  NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK.push_back(
+      std::to_string(hangRemoteRank));
+  NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK.push_back(std::to_string(hangOpStep));
+
+  ncclComm_t comm =
+      createNcclComm(this->globalRank, this->numRanks, this->localRank);
+
+  if (comm->nNodes < 2) {
+    NCCLCHECK_TEST(ncclCommDestroy(comm));
+    NCCL_PROXYTRACE.clear();
+
+    printf("Skipping test since nNodes < 2\n");
+    GTEST_SKIP();
+  }
+
+  EXPECT_NE(comm->proxyState->trace, nullptr);
+
+  const int count = 1048576;
+  const int nColl = 10;
+
+  auto begin = std::chrono::high_resolution_clock::now();
+  uint64_t opCountStart = comm->opCount;
+  runAllReduce(count, nColl, comm);
+
+  // sleep 5 seconds to reach the hanging point
+  sleep(5);
+
+  std::vector<ProxyCollTraceEntry> activeSends;
+  std::vector<ProxyCollTraceEntry> activeRecvs;
+  std::vector<uint64_t> completedColls;
+  size_t nActiveSends =
+      comm->proxyState->trace->queryActiveSends(comm->commHash, activeSends);
+  size_t nActiveRecvs =
+      comm->proxyState->trace->queryActiveRecvs(comm->commHash, activeRecvs);
+
+  size_t nCompletedColls = comm->proxyState->trace->queryCompletedColls(
+      comm->commHash, completedColls);
+
+  EXPECT_GT(nActiveSends, 0);
+  EXPECT_GT(nActiveRecvs, 0);
+  EXPECT_EQ(nCompletedColls, hangOpCount);
+
+  for (auto& entry : activeSends) {
+    // the hanging collective and potentially the next collective can be active
+    EXPECT_TRUE(
+        entry.opCount == hangOpCount || entry.opCount == hangOpCount + 1);
+  }
+  for (auto& entry : activeRecvs) {
+    EXPECT_TRUE(
+        entry.opCount == hangOpCount || entry.opCount == hangOpCount + 1);
+  }
+
+  // DO NOT call ncclCommDestroy() here, as it will trigger the hang
+  // Manually set abortFlag to abort kernel so that cudaStreamDestroy can finish
+  // TODO: we should call ncclCommAbort() once it guarantees termination
+  *comm->abortFlag = 1;
+
+  NCCL_PROXYTRACE.clear();
+  NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK.clear();
+}
+
 int main(int argc, char* argv[]) {
   ::testing::InitGoogleTest(&argc, argv);
   ::testing::AddGlobalTestEnvironment(new MPIEnvironment);

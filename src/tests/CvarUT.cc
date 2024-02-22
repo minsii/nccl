@@ -3140,6 +3140,44 @@ TEST_F(CvarTest, NCCL_PROXYTRACE_warn_dup_val) {
   testWarn("NCCL_PROXYTRACE", "Duplicate token");
 }
 
+TEST_F(CvarTest, NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK_valuelist_0) {
+  setenv("NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK", "val1,val2,val3", 1);
+  std::vector<std::string> vals{"val1","val2","val3"};
+  ncclCvarInit();
+  checkListValues<std::string>(vals, NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK);
+}
+
+TEST_F(CvarTest, NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK_valuelist_1) {
+  setenv("NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK", "val1:1,val2:2,val3:3", 1);
+  std::vector<std::string> vals{"val1:1","val2:2","val3:3"};
+  ncclCvarInit();
+  checkListValues<std::string>(vals, NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK);
+}
+
+TEST_F(CvarTest, NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK_valuelist_2) {
+  setenv("NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK", "val", 1);
+  std::vector<std::string> vals{"val"};
+  ncclCvarInit();
+  checkListValues<std::string>(vals, NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK);
+}
+
+TEST_F(CvarTest, NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK_valuelist_3) {
+  setenv("NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK", "val1, val_w_space  ", 1);
+  std::vector<std::string> vals{"val1","val_w_space"};
+  ncclCvarInit();
+  checkListValues<std::string>(vals, NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK);
+}
+
+TEST_F(CvarTest, NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK_default_value) {
+  testDefaultValue("NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK");
+  EXPECT_EQ(NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK.size(), 0);
+}
+
+TEST_F(CvarTest, NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK_warn_dup_val) {
+  setenv("NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK", "dummy,dummy", 1);
+  testWarn("NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK", "Duplicate token");
+}
+
 TEST_F(CvarTest, NCCL_PROXY_APPEND_BATCH_SIZE_value_0) {
   testNumValue<int64_t>("NCCL_PROXY_APPEND_BATCH_SIZE", 0);
   EXPECT_EQ(NCCL_PROXY_APPEND_BATCH_SIZE, 0);

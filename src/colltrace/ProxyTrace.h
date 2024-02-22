@@ -91,6 +91,15 @@ class ProxyTrace {
       int step,
       ProxyOpStepStatus status);
 
+  // Allow proxy thread to mock a send failure if the current send operation
+  // matches user specified config (see NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK).
+  // Return mocked flag to true if mocked, otherwise return false.
+  ncclResult_t runSendFailureMock(
+      struct ncclProxyArgs* args,
+      int sub,
+      int step,
+      bool& mocked);
+
   // print details of internal structures for both active and completed
   // send/recvs. For debugging.
   void print();
@@ -167,6 +176,18 @@ class ProxyTrace {
     VERBOSE = 2,
   };
   int features_{0}; // bitwise OR of Features
+
+  struct FailureMockConfig {
+    bool enabled{false};
+    uint64_t opCount;
+    int channelId;
+    int rank;
+    int remoteRank;
+    int step;
+    std::string serialize();
+  };
+  FailureMockConfig failureMockConfig_;
+  void failureMockSetup();
 
   std::mutex mutex_;
 

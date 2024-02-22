@@ -21,6 +21,12 @@
      trace - enable trace only.
      verbose - print every proxy operation step as NCCL INFO log.
 
+ - name        : NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK
+   type        : stringlist
+   default     :
+   description : |-
+     Backdoor to mock a hanging progress in proxy thread.
+
 === END_NCCL_CVAR_INFO_BLOCK ===
 */
 
@@ -59,6 +65,80 @@ ProxyTrace::ProxyTrace() {
       NCCL_INIT,
       "PROXYTRACE: initialized with features: %s",
       enabledFeaturesStr.c_str());
+
+  this->failureMockSetup();
+}
+
+std::string ProxyTrace::FailureMockConfig::serialize() {
+  std::stringstream ss;
+  ss << "{";
+  ss << "opcount=" << opCount << ",";
+  ss << "channelId=" << channelId << ",";
+  ss << "rank=" << rank << ",";
+  ss << "remoteRank=" << remoteRank << ",";
+  ss << "step=" << step;
+  ss << "}";
+  return ss.str();
+}
+
+void ProxyTrace::failureMockSetup() {
+  std::vector<std::string> sendFailureMockFmt = {
+      "<opCount>", "<channelId>", "<rank>", "<remoteRank>", "<step>"};
+
+  // Enable mock only when all required fields are set
+  if (NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK.size() ==
+      sendFailureMockFmt.size()) {
+    failureMockConfig_.opCount =
+        std::stoi(NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK[0]);
+    failureMockConfig_.channelId =
+        std::stoi(NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK[1]);
+    failureMockConfig_.rank =
+        std::stoi(NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK[2]);
+    failureMockConfig_.remoteRank =
+        std::stoi(NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK[3]);
+    failureMockConfig_.step =
+        std::stoi(NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK[4]);
+
+    failureMockConfig_.enabled = true;
+    std::string sendFailureMockStr = failureMockConfig_.serialize();
+
+    INFO(
+        NCCL_INIT,
+        "PROXYTRACE: setup network send failure mock: %s",
+        sendFailureMockStr.c_str());
+  } else if (!NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK.empty()) {
+    WARN(
+        "PROXYTRACE: invalid value of NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK. Valid format: %s",
+        vecToStr(sendFailureMockFmt, ",").c_str());
+  }
+}
+
+static bool firstMock = true;
+ncclResult_t ProxyTrace::runSendFailureMock(
+    struct ncclProxyArgs* args,
+    int sub,
+    int step,
+    bool& mocked) {
+  if (failureMockConfig_.enabled &&
+      args->commOpCount == failureMockConfig_.opCount &&
+      args->subs[sub].channelId == failureMockConfig_.channelId &&
+      args->rank == failureMockConfig_.rank &&
+      args->remoteRank == failureMockConfig_.remoteRank &&
+      step == failureMockConfig_.step) {
+    std::string sendFailureMockStr = failureMockConfig_.serialize();
+    // Only warn the first time, because proxy thread will hang here and repeat
+    // the mock
+    if (firstMock) {
+      WARN(
+          "PROXYTRACE: Mocked send failure, skiped SEND with %s",
+          sendFailureMockStr.c_str());
+    }
+    firstMock = false;
+    mocked = true;
+  } else {
+    mocked = false;
+  }
+  return ncclSuccess;
 }
 
 // Check if a given commHash:opCount:channelId exists in activeMap.

@@ -453,6 +453,9 @@ extern std::string NCCL_PROTO_DEFAULT;
 extern std::vector<std::string> NCCL_PROXYTRACE;
 extern std::vector<std::string> NCCL_PROXYTRACE_DEFAULT;
 
+extern std::vector<std::string> NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK;
+extern std::vector<std::string> NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK_DEFAULT;
+
 extern int64_t NCCL_PROXY_APPEND_BATCH_SIZE;
 extern int64_t NCCL_PROXY_APPEND_BATCH_SIZE_DEFAULT;
 

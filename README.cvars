@@ -155,6 +155,7 @@ Description:
     and a background thread. Valid options are comma separated list
     of the following features. Leave empty to disable all features.
     verbose - print every completed event as NCCL INFO log. Mostly for debug.
+    trace - Just enable collective trace.
     file    - dump traced events to file at communicator destory. Also see
            NCCL_COLLTRACE_DIR.
     online_tuning - enable online tuning
@@ -1101,6 +1102,12 @@ Description:
     all features.
     verbose - print every proxy operation step as NCCL INFO log.
     query - trace all steps and allow ncclCommDump to query all records.
+Type: stringlist
+Default: None
+
+NCCL_PROXYTRACE_NET_SEND_FAILURE_MOCK
+Description:
+    Backdoor to mock a hanging progress in proxy thread.
 Type: stringlist
 Default: None
 

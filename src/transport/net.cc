@@ -1027,7 +1027,11 @@ static ncclResult_t sendProxyProgress(struct ncclProxyState* proxyState, struct 
 #ifdef ENABLE_NTRACE
             ntraceLogPeerRanks(resources->tpRank, resources->tpRemoteRank);
 #endif
-            NCCLCHECK(proxyState->ncclNet->isend(resources->netSendComm, buff, size, resources->tpRank, mhandle, sub->requests+buffSlot));
+            bool mocked = false;
+            PROXY_TRACE_CALL(proxyState, proxyState->trace->runSendFailureMock(args, s, sub->transmitted, mocked));
+            if(!mocked) {
+              NCCLCHECK(proxyState->ncclNet->isend(resources->netSendComm, buff, size, resources->tpRank, mhandle, sub->requests+buffSlot));
+            }
             if (sub->requests[buffSlot] != NULL) {
               TRACE(NCCL_NET, "sendProxy [%ld/%d] Isend posted, req %p", sub->transmitted, buffSlot, sub->requests[buffSlot]);
               sizesFifo[buffSlot] = -1;
