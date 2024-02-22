@@ -9,6 +9,7 @@
 #include <sstream>
 #include "Ctran.h"
 #include "checks.h"
+#include "gmock/gmock.h"
 #include "nccl_cvars.h"
 #include "tests_common.cuh"
 
@@ -92,6 +93,7 @@ TEST_F(CollTraceTest, TraceFeatureEnableCollTrace) {
   std::string output = testing::internal::GetCapturedStdout();
   //
   EXPECT_THAT(output, testing::HasSubstr("enabled features: trace - Init COMPLETE"));
+
   EXPECT_THAT(output, testing::Not(testing::HasSubstr("COLLTRACE initialization failed")));
   NCCL_COLLTRACE.clear();
 }
