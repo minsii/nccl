@@ -17,7 +17,7 @@
 #include "graph.h"
 #include "argcheck.h"
 #include "tuner.h"
-#include "colltrace.h"
+#include "CollTrace.h"
 #include "AlgoInit.h"
 #include <fcntl.h>
 #include <string.h>
@@ -1585,8 +1585,6 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   // update communicator state
   comm->initState = ncclSuccess;
 
-  COLLTRACE_INIT(comm);
-
   // Trace this call for replay tool
   if (job->parent) {
     /* unlink child abort flag. */
@@ -1601,6 +1599,8 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   NCCLCHECKGOTO(nccl::algorithms::algoInit(comm), res, fail);
 
   NCCLCHECKGOTO(ctranInit(comm), res, fail);
+
+  NCCLCHECKGOTO(collTraceInit(comm), res, fail);
 
   timerDeltaMs = std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - timerBegin).count() * 1000;
   INFO(NCCL_INIT,"comm %p rank %d nranks %d localrank %d localranks %d cudaDev %d nvmlDev %d busId %lx commId 0x%llx commHash %lu - Init COMPLETE in %.2f ms",
@@ -2007,6 +2007,8 @@ static ncclResult_t commDestroySync(struct ncclAsyncJob* job_) {
   int commDevice = comm->cudaDev;
   ncclResult_t ret = ncclSuccess;
 
+  NCCLCHECKGOTO(collTraceDestroy(comm), ret, fail);
+
   NCCLCHECKGOTO(ctranDestroy(comm), ret, fail);
 
   NCCLCHECKGOTO(nccl::algorithms::algoDestroy(comm), ret, fail);
@@ -2199,8 +2201,6 @@ ncclResult_t ncclCommDestroy(ncclComm_t comm) {
     return ncclSuccess;
   }
 
-  COLLTRACE_EXIT(comm);
-
   int rank = comm->rank, nranks = comm->nRanks, cudaDev = comm->cudaDev;
 
   NvtxParamsCommInitRank payload{rank, nranks, cudaDev};
@@ -2234,8 +2234,6 @@ ncclResult_t ncclCommAbort(ncclComm_t comm) {
     NVTX3_FUNC_RANGE_IN(nccl_domain);
     return ncclSuccess;
   }
-
-  COLLTRACE_EXIT(comm);
 
   volatile uint32_t* childAbortFlag;
   int rank = comm->rank, nranks = comm->nRanks, cudaDev = comm->cudaDev;
