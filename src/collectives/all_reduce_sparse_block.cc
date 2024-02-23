@@ -105,7 +105,7 @@ NCCL_API(
     size_t recv_count,
     ncclDataType_t datatype,
     ncclRedOp_t op,
-    ncclComm* comm,
+    ncclComm_t comm,
     cudaStream_t stream);
 
 /* The firsr version of ncclAllReduceSparseBlock is based on an unpack copy
@@ -139,7 +139,7 @@ ncclResult_t ncclAllReduceSparseBlock(
     size_t recv_count,
     ncclDataType_t datatype,
     ncclRedOp_t op,
-    ncclComm* comm,
+    ncclComm_t comm,
     cudaStream_t stream) {
   // Restriction check (see functionality limitation in function description)
   // TODO: remove such restrictions if needed)

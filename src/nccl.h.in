@@ -349,7 +349,7 @@ ncclResult_t pncclReduce(const void* sendbuff, void* recvbuff, size_t count, ncc
  *    IN  recvCount     - Number of elements in recvbuff. recvcount must be equal or larger than blockcount * blocklength
  *    IN  datatype      - Type of each data element
  *    IN  ncclRedOp_t op - Reduce operation. Only ncclSum is supported at this time.
- *    IN  ncclComm* comm
+ *    IN  ncclComm_t comm
  *    IN  cudaStream_t stream
  *
  * Example:
@@ -365,9 +365,9 @@ ncclResult_t pncclReduce(const void* sendbuff, void* recvbuff, size_t count, ncc
  *    rank3: recvbuff = [3,3,  6,6,  12,12, 8,8, 10,10, 24,24, 14,14]
  */
 ncclResult_t  ncclAllReduceSparseBlock(const void* sendbuff, const int64_t* recvIndices, size_t blockCount,
-    size_t blockLength, void* recvbuff, size_t recvCount, ncclDataType_t datatype, ncclRedOp_t op, ncclComm* comm, cudaStream_t stream);
+    size_t blockLength, void* recvbuff, size_t recvCount, ncclDataType_t datatype, ncclRedOp_t op, ncclComm_t comm, cudaStream_t stream);
 ncclResult_t  pncclAllReduceSparseBlock(const void* sendbuff, const int64_t* recvIndices, size_t blockCount,
-    size_t blockLength, void* recvbuff, size_t recvCount, ncclDataType_t datatype, ncclRedOp_t op, ncclComm* comm, cudaStream_t stream);
+    size_t blockLength, void* recvbuff, size_t recvCount, ncclDataType_t datatype, ncclRedOp_t op, ncclComm_t comm, cudaStream_t stream);
 
 /*
  * (deprecated) Broadcast (in-place)
@@ -458,7 +458,7 @@ ncclResult_t pncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcou
  *    IN  recvcounts  - Length of each block in recvbuff
  *    IN  rdispls     - Offsets into recvbuff for each participating rank
  *    IN  datatype      - Type of each data element
- *    IN  ncclComm* comm
+ *    IN  ncclComm_t comm
  *    IN  cudaStream_t stream
  */
 ncclResult_t  ncclAllToAllv(const void *sendbuff, const size_t sendcounts[],
@@ -479,7 +479,7 @@ ncclResult_t pncclAllToAllv(const void *sendbuff, const size_t sendcounts[],
  *    OUT recvbuff    - Pointer to recvbuf
  *    IN  count       - count of elements to send to (receive from) each rank
  *    IN  datatype      - Type of each data element
- *    IN  ncclComm* comm
+ *    IN  ncclComm_t comm
  *    IN  cudaStream_t stream
  */
 ncclResult_t  ncclAllToAll(const void* sendbuff, void* recvbuff, size_t count,
