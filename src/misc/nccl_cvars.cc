@@ -231,6 +231,8 @@ std::string NCCL_COLLNET_ENABLE;
 std::string NCCL_COLLNET_ENABLE_DEFAULT;
 int64_t NCCL_COLLNET_NODE_THRESHOLD;
 int64_t NCCL_COLLNET_NODE_THRESHOLD_DEFAULT;
+std::vector<std::string> NCCL_COLLTRACE;
+std::vector<std::string> NCCL_COLLTRACE_DEFAULT;
 std::string NCCL_COLLTRACE_DIR;
 std::string NCCL_COLLTRACE_DIR_DEFAULT;
 int64_t NCCL_COMM_BLOCKING;
@@ -524,6 +526,7 @@ void initEnvSet(std::unordered_set<std::string>& env) {
   env.insert("NCCL_CHUNK_SIZE");
   env.insert("NCCL_COLLNET_ENABLE");
   env.insert("NCCL_COLLNET_NODE_THRESHOLD");
+  env.insert("NCCL_COLLTRACE");
   env.insert("NCCL_COLLTRACE_DIR");
   env.insert("NCCL_COMM_BLOCKING");
   env.insert("NCCL_COMM_ID");
@@ -761,6 +764,11 @@ void readCvarEnv() {
 
   NCCL_COLLNET_NODE_THRESHOLD = env2num<int64_t>("NCCL_COLLNET_NODE_THRESHOLD", "2");
   NCCL_COLLNET_NODE_THRESHOLD_DEFAULT = env2num<int64_t>("NCCL_ENV_DO_NOT_SET", "2");
+
+  NCCL_COLLTRACE.clear();
+  NCCL_COLLTRACE = env2strlist("NCCL_COLLTRACE", "");
+  NCCL_COLLTRACE_DEFAULT.clear();
+  NCCL_COLLTRACE_DEFAULT = env2strlist("NCCL_ENV_DO_NOT_SET", "");
 
   NCCL_COLLTRACE_DIR = env2str("NCCL_COLLTRACE_DIR", "");
   NCCL_COLLTRACE_DIR_DEFAULT = env2str("NCCL_ENV_DO_NOT_SET", "");

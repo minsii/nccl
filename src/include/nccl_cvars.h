@@ -78,6 +78,9 @@ extern std::string NCCL_COLLNET_ENABLE_DEFAULT;
 extern int64_t NCCL_COLLNET_NODE_THRESHOLD;
 extern int64_t NCCL_COLLNET_NODE_THRESHOLD_DEFAULT;
 
+extern std::vector<std::string> NCCL_COLLTRACE;
+extern std::vector<std::string> NCCL_COLLTRACE_DEFAULT;
+
 extern std::string NCCL_COLLTRACE_DIR;
 extern std::string NCCL_COLLTRACE_DIR_DEFAULT;
 

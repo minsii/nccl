@@ -17,7 +17,7 @@ LIBSRCFILES := init.cc init_nvtx.cc channel.cc bootstrap.cc transport.cc enqueue
                 collectives/sendrecv.cc collectives/all_reduce.cc collectives/all_gather.cc collectives/broadcast.cc collectives/reduce.cc collectives/reduce_scatter.cc \
                 graph/topo.cc graph/paths.cc graph/search.cc graph/connect.cc graph/rings.cc graph/trees.cc graph/tuning.cc graph/xml.cc
 LIBSRCFILES += collectives/all_reduce_sparse_block.cc setinfo.cc commSplitType.cc
-LIBSRCFILES += misc/colltrace.cc misc/tuner.cc
+LIBSRCFILES += misc/tuner.cc
 LIBSRCFILES += misc/nccl_cvars.cc
 LIBSRCFILES += misc/logger.cc
 LIBSRCFILES += ctran/backends/ib/CtranIb.cc ctran/backends/ib/CtranIbImpl.cc \
@@ -42,11 +42,12 @@ LIBSRCFILES += algorithms/AlgoDirector.cc \
                algorithms/allreduce/AlgoAllReduceDdaNvsScatGatIpc.cc \
                algorithms/allreduce/AlgoManagerAllReduce.cc
 LIBSRCFILES += collectives/all_to_allv.cc collectives/all_to_all.cc
+LIBSRCFILES += colltrace/CollTrace.cc
 LIBSRCFILES += window.cc
 
 INCLUDES := -Iinclude
 INCLUDES += -Ialgorithms -Ialgorithms/allreduce
-INCLUDES += -Ictran -Ictran/utils -Ictran/backends/ib -Ictran/mapper -Ictran/gpe -Ictran/algos
+INCLUDES += -Ictran -Ictran/utils -Ictran/backends/ib -Ictran/mapper -Ictran/gpe -Ictran/algos -Icolltrace/
 INCLUDES += -Ictran/algos/AllToAll
 
 ##### lib files

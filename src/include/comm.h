@@ -14,9 +14,9 @@
 #include "proxy.h"
 #include "strongstream.h"
 #include "info.h"
-#include "colltrace.h"
 #include "AlgoDirector.h"
 #include "Ctran.h"
+#include "CollTrace.h"
 
 #if CUDART_VERSION < 9000
 struct cudaLaunchParams {
@@ -354,11 +354,10 @@ struct ncclComm {
   // Tuning plugin
   ncclTuner_t* tuner;
 
-  // colltrace object
-  COLLTRACE_OBJECT();
-
   std::unique_ptr<nccl::algorithms::AlgoDirector> algoDirector{nullptr};
   std::unique_ptr<Ctran> ctran{nullptr};
+
+  std::unique_ptr<CollTrace> collTrace{nullptr};
 };
 
 enum ncclLaunchMode {

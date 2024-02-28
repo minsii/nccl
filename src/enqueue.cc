@@ -11,7 +11,7 @@
 #include "bootstrap.h"
 #include "channel.h"
 #include "cudawrap.h"
-#include "colltrace.h"
+#include "CollTrace.h"
 
 #include <cstring> // std::memcpy
 #include <cinttypes> // PRIx64
@@ -655,7 +655,7 @@ static ncclResult_t scheduleCollTasksToPlan(
       }
     }
 
-    COLLTRACE_INFO_COPY(plan, aggInfo);
+    COLLTRACE_INFO_COPY(comm, plan, aggInfo);
   }
   return ncclSuccess;
 }
@@ -1109,7 +1109,7 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   size_t smem = ncclShmemDynamicSize(comm->cudaArch);
   void *args[3] = {&comm->devComm, &plan->channelMask, &plan->workHead};
 
-  COLLTRACE_ACQUIRE_EVENT(comm);
+  COLLTRACE_ACQUIRE_EVENT(comm, plan);
 
   #if CUDART_VERSION >= 11080
   int driverVersion;
@@ -1156,16 +1156,16 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
     launchConfig.attrs = launchAttrs;
     launchConfig.numAttrs = attrs;
     launchConfig.stream = launchStream;
-    COLLTRACE_RECORD_START_EVENT();
+    COLLTRACE_RECORD_START_EVENT(comm, launchStream);
     CUDACHECK(cudaLaunchKernelExC(&launchConfig, fn, args));
-    COLLTRACE_RECORD_END_EVENT(comm);
+    COLLTRACE_RECORD_END_EVENT(comm, plan, launchStream);
     return ncclSuccess;
   }
   #endif
   // Standard kernel launch
-  COLLTRACE_RECORD_START_EVENT();
+  COLLTRACE_RECORD_START_EVENT(comm, launchStream);
   CUDACHECK(cudaLaunchKernel(fn, grid, block, args, smem, launchStream));
-  COLLTRACE_RECORD_END_EVENT(comm);
+  COLLTRACE_RECORD_END_EVENT(comm, plan, launchStream);
   return ncclSuccess;
 }
 

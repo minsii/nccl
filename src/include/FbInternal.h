@@ -11,4 +11,13 @@
   do {                        \
   } while (0)
 
+#define COLLTRACE_IO_FB_DURING_RUN(result, rank_) \
+  do {                                            \
+  } while (0)
+#endif
+
+#ifdef ENABLE_IN_TRAINER_TUNE
+#include "trainer.h"
+#else
+#define ncclFbGetTrainerIteration() (0)
 #endif
