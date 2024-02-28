@@ -167,6 +167,9 @@ struct ncclKernelPlan {
   struct ncclComm* comm;
   struct ncclKernelPlan* next;
   struct ncclInfo aggInfo;
+  // used for collTrace to track p2p submitted in current plan
+  size_t nSendBytes;
+  size_t nRecvBytes;
 
   bool persistent; // aka captured in a graph
   bool kernelSpecialized;

@@ -165,6 +165,8 @@ void* CollTrace::collTraceThreadFnImpl() {
         eventPool_.add(std::move(curEvent->start));
         eventPool_.add(std::move(curEvent->stop));
 
+        // FIXME: cannot record protocol for sendrecvs since a grouped sendrecv
+        // may contain multiple protocols
         if (features & CollTrace::Features::FB_IO_DURING_RUN) {
           COLLTRACE_IO_FB_DURING_RUN(result, comm_->rank);
         }
