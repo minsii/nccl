@@ -79,7 +79,7 @@ TEST_F(CollTraceTest, VerboseAllReduce) {
   const int count = 1048576;
   const int nColl = 10;
 
-  // testing::internal::CaptureStdout();
+  testing::internal::CaptureStdout();
 
   prepareAllreduce(count);
   for (int i = 0; i < nColl; i++) {
@@ -90,13 +90,13 @@ TEST_F(CollTraceTest, VerboseAllReduce) {
 
   NCCLCHECK_TEST(ncclCommDestroy(comm));
 
-  // std::string output = testing::internal::GetCapturedStdout();
-  // for (int i = 0; i < nColl; i++) {
-  //   std::stringstream ss;
-  //   ss << "COLLTRACE: opCount " << std::hex << i << " AllReduce";
-  //   std::string traceLog = ss.str();
-  //   EXPECT_THAT(output, testing::HasSubstr(traceLog));
-  // }
+  std::string output = testing::internal::GetCapturedStdout();
+  for (int i = 0; i < nColl; i++) {
+    std::stringstream ss;
+    ss << "COLLTRACE: opCount " << std::hex << i << " AllReduce";
+    std::string traceLog = ss.str();
+    EXPECT_THAT(output, testing::HasSubstr(traceLog));
+  }
   NCCL_COLLTRACE.clear();
 }
 
