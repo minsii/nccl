@@ -71,6 +71,32 @@ class CollTraceTest : public ::testing::Test {
   cudaStream_t stream;
 };
 
+TEST_F(CollTraceTest, TraceFeatureEnableCollTrace) {
+  // overwrite CollTrace features before creating comm
+  NCCL_COLLTRACE.push_back("trace");
+  testing::internal::CaptureStdout();
+  ncclComm_t comm =
+      createNcclComm(this->globalRank, this->numRanks, this->localRank);
+  const int count = 1048576;
+  const int nColl = 10;
+
+
+  prepareAllreduce(count);
+  for (int i = 0; i < nColl; i++) {
+    NCCLCHECK_TEST(
+        ncclAllReduce(sendBuf, recvBuf, count, ncclInt, ncclSum, comm, stream));
+  }
+  CUDACHECK_TEST(cudaStreamSynchronize(stream));
+
+  NCCLCHECK_TEST(ncclCommDestroy(comm));
+
+  std::string output = testing::internal::GetCapturedStdout();
+  //
+  EXPECT_THAT(output, testing::HasSubstr("enabled features: trace - Init COMPLETE"));
+  EXPECT_THAT(output, testing::Not(testing::HasSubstr("COLLTRACE initialization failed")));
+  NCCL_COLLTRACE.clear();
+}
+
 TEST_F(CollTraceTest, VerboseAllReduce) {
   // overwrite CollTrace features before creating comm
   NCCL_COLLTRACE.push_back("verbose");
