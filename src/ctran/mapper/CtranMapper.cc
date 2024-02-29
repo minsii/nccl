@@ -14,7 +14,7 @@
 #include "bootstrap.h"
 #include "comm.h"
 #include "nccl_cvars.h"
-#include "CtranChecks.h"
+#include "ExtChecks.h"
 
 /*
 === BEGIN_NCCL_CVAR_INFO_BLOCK ===

@@ -11,7 +11,7 @@
 #include "CtranIbImpl.h"
 #include "CtranIbVc.h"
 #include "CtranUtils.h"
-#include "CtranChecks.h"
+#include "ExtChecks.h"
 
 void CtranIb::Impl::bootstrapAccept(CtranIb::Impl *pimpl) {
   while (1) {

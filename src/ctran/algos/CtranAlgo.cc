@@ -4,7 +4,7 @@
 #include <nccl_common.h>
 #include <memory>
 #include <stdexcept>
-#include "CtranChecks.h"
+#include "ExtChecks.h"
 #include "DdaThreadedData.h"
 #include "bootstrap.h"
 #include "checks.h"

@@ -5,7 +5,7 @@
 #include <iostream>
 #include <new>
 #include <stdexcept>
-#include "CtranChecks.h"
+#include "ExtChecks.h"
 #include "CtranGpe.h"
 #include "CtranGpeKernel.h"
 #include "checks.h"

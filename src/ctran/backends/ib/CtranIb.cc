@@ -14,7 +14,7 @@
 #include "CtranIb.h"
 #include "CtranIbImpl.h"
 #include "CtranIbVc.h"
-#include "CtranChecks.h"
+#include "ExtChecks.h"
 
 /*
 === BEGIN_NCCL_CVAR_INFO_BLOCK ===
