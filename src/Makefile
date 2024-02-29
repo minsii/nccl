@@ -44,6 +44,7 @@ LIBSRCFILES += algorithms/AlgoDirector.cc \
 LIBSRCFILES += collectives/all_to_allv.cc collectives/all_to_all.cc
 LIBSRCFILES += colltrace/CollTrace.cc
 LIBSRCFILES += window.cc
+LIBSRCFILES += commHash.cc
 
 INCLUDES := -Iinclude
 INCLUDES += -Ialgorithms -Ialgorithms/allreduce
