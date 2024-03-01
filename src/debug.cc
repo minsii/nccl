@@ -7,12 +7,13 @@
 #include "core.h"
 #include "nccl_net.h"
 #include "nccl_cvars.h"
+#include "logger.h"
+
 #include <stdlib.h>
 #include <stdarg.h>
 #include <sys/syscall.h>
 #include <iomanip>
 #include <sstream>
-#include "logger.h"
 
 /*
 === BEGIN_NCCL_CVAR_INFO_BLOCK ===
@@ -183,6 +184,7 @@ void ncclDebugInit() {
   }
 
   ncclEpoch = std::chrono::steady_clock::now();
+  NcclLogger::init(ncclDebugFile);
   __atomic_store_n(&ncclDebugLevel, tempNcclDebugLevel, __ATOMIC_RELEASE);
   pthread_mutex_unlock(&ncclDebugLock);
 }
@@ -238,11 +240,7 @@ void ncclDebugLog(ncclDebugLogLevel level, unsigned long flags, const char *file
     va_end(vargs);
     buffer[len++] = '\n';
 
-    if (NCCL_LOGGER_MODE == NCCL_LOGGER_MODE::sync) {
-      fwrite(buffer, 1, len, ncclDebugFile);
-    } else {
-      NcclLogger::getInstance(ncclDebugFile).log(std::string(buffer, len));
-    }
+    NcclLogger::log(std::string(buffer, len), ncclDebugFile);
 
     // also print to stderr if we're logging into file
     if (ncclDebugFile != stdout && ncclDebugFile != stderr &&

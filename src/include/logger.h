@@ -3,9 +3,11 @@
 #ifndef NCCL_LOGGER_H
 #define NCCL_LOGGER_H
 
+#include <nccl_cvars.h>
 #include <atomic>
 #include <condition_variable>
 #include <cstdio>
+#include <memory>
 #include <mutex>
 #include <queue>
 #include <string>
@@ -13,22 +15,28 @@
 
 class NcclLogger {
  public:
-  void log(const std::string&);
-  static NcclLogger& getInstance(FILE* ncclDebugFile) {
-    static NcclLogger ncclDebugLogger_t(ncclDebugFile);
-    return ncclDebugLogger_t;
-  }
+  static void init(FILE* ncclDebugFile);
+
+  static void log(const std::string& msg, FILE* ncclDebugFile) noexcept;
 
   NcclLogger(const NcclLogger&) = delete;
   NcclLogger& operator=(const NcclLogger&) = delete;
+  ~NcclLogger();
 
  private:
   void stop();
   void logThreadFunc();
   void writeToFile(const std::string& message);
+  void enqueueLog(const std::string&) noexcept;
 
   NcclLogger(FILE*);
-  ~NcclLogger();
+
+  // Ideally ncclDebugInit (the only function that is supposed to call NcclLogger::init)
+  // is already protected to ensure it can only be called once, so we don't need to do
+  // it ourselves. But just trying to be super confident that we will never initialize
+  // the singleton twice.
+  static std::atomic_flag singletonInitialized_;
+  static std::unique_ptr<NcclLogger> singleton_;
 
   std::thread loggerThread_;
   std::unique_ptr<std::queue<std::string>> mergedMsgQueue_;
