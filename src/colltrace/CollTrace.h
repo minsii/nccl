@@ -2,12 +2,15 @@
 #ifndef COLL_TRACE_H
 #define COLL_TRACE_H
 
+#include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <list>
 #include <memory>
 #include <mutex>
 #include <queue>
 #include <thread>
+#include <condition_variable>
 #include "FbInternal.h"
 #include "checks.h"
 #include "debug.h"
@@ -33,13 +36,23 @@ enum class EventState {
 
 // Event data structure
 struct EventInfo {
+  enum class EventType {
+    COMM,
+    // Wake up the worker thread. Currently used to wake up the worker thread
+    // to dump information.
+    WAKE_UP,
+    TERMINATE
+  };
+
   uint64_t opCount;
   ncclInfo info;
   int64_t iteration;
   CudaEventPtr start;
   CudaEventPtr stop;
   cudaStream_t stream;
+  EventType eventType = EventType::COMM;
 
+  EventInfo(EventType type) : eventType(type) {}
   EventInfo() = default;
   EventInfo(const EventInfo&) = delete;
   EventInfo& operator=(const EventInfo&) = delete;
@@ -108,32 +121,33 @@ class CollTrace {
   class EventQueue {
    private:
     std::queue<std::unique_ptr<EventInfo>> queue_;
+    std::condition_variable cv_;
     std::mutex mutex_;
 
    public:
     std::queue<std::unique_ptr<EventInfo>> dumpQueue() {
       std::queue<std::unique_ptr<EventInfo>> tmp {};
       {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::unique_lock<std::mutex> lock(mutex_);
         queue_.swap(tmp);
       }
       return tmp;
     }
     void push(std::unique_ptr<EventInfo> item) {
-      std::lock_guard<std::mutex> lock(mutex_);
-      queue_.push(std::move(item));
+      {
+        std::lock_guard<std::mutex> lock(mutex_);
+        queue_.push(std::move(item));
+      }
+      cv_.notify_one();
     }
     bool isEmpty() {
       std::lock_guard<std::mutex> lock(mutex_);
       return queue_.empty();
     }
-    std::unique_ptr<EventInfo> tryPop() {
-      std::unique_lock<std::mutex> lock(mutex_, std::try_to_lock);
-      if (!lock.owns_lock()) {
-        return NULL;
-      }
+    std::unique_ptr<EventInfo> waitPop() {
+      std::unique_lock<std::mutex> lock(mutex_);
       if (queue_.empty()) {
-        return NULL;
+        cv_.wait(lock, [this] { return !queue_.empty(); });
       }
       std::unique_ptr<EventInfo> item = std::move(queue_.front());
       queue_.pop();
@@ -153,7 +167,13 @@ class CollTrace {
   std::shared_ptr<EventInfo> curEvent_;
   std::atomic<EventState> curEventState_{EventState::PENDING};
   std::list<ResultInfo> results_;
-  std::atomic<bool> workerThreadExitSignal_{false};
+  // Lock changes from worker thread to curEvent_, eventQueue_ and results_
+  std::mutex workerMutex_;
+
+  // For testing purpose
+  std::atomic<bool> waitingForQueueEmpty_;
+  std::mutex waitQueueEmptyMutex_;
+  std::condition_variable waitQueueEmptyCv_;
 
   struct ncclComm* comm_{nullptr};
   std::thread profilingWorkerThread_;
@@ -180,6 +200,8 @@ class CollTrace {
   std::unique_ptr<EventInfo> getEventFromPool();
 
   void enqueueEvent(std::unique_ptr<EventInfo> eventInfo);
+
+  void waitForWorkerFinishQueue();
 };
 
 ncclResult_t collTraceInit(ncclComm* comm);

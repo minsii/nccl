@@ -1,5 +1,6 @@
 // (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
+#include <CollTrace.h>
 #include <comm.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -224,6 +225,65 @@ TEST_F(CollTraceTest, VerboseSendOrRecv) {
     std::string traceLog = ss.str();
     EXPECT_THAT(output, testing::HasSubstr(traceLog));
   }
+  NCCL_COLLTRACE.clear();
+}
+
+TEST_F(CollTraceTest, DumpAllFinished) {
+  // overwrite CollTrace features before creating comm
+  NCCL_COLLTRACE.push_back("trace");
+  ncclComm_t comm =
+      createNcclComm(this->globalRank, this->numRanks, this->localRank);
+  const int count = 1048576;
+  const int nColl = 10;
+
+  prepareAllreduce(count);
+  for (int i = 0; i < nColl; i++) {
+    NCCLCHECK_TEST(
+        ncclAllReduce(sendBuf, recvBuf, count, ncclInt, ncclSum, comm, stream));
+  }
+
+  EXPECT_TRUE(comm->collTrace != nullptr);
+  comm->collTrace->waitForWorkerFinishQueue();
+  auto dump = comm->collTrace->dumpTrace();
+  EXPECT_EQ(dump.pastColls.size(), nColl);
+  EXPECT_EQ(dump.currentColl, nullptr);
+
+  NCCLCHECK_TEST(ncclCommDestroy(comm));
+
+  NCCL_COLLTRACE.clear();
+}
+
+TEST_F(CollTraceTest, DumpWithUnfinished) {
+  // overwrite CollTrace features before creating comm
+  NCCL_COLLTRACE.push_back("trace");
+  ncclComm_t comm =
+      createNcclComm(this->globalRank, this->numRanks, this->localRank);
+  const int count = 1048576;
+  const int nColl = 10;
+
+  prepareAllreduce(count);
+  for (int i = 0; i < nColl; i++) {
+    NCCLCHECK_TEST(
+        ncclAllReduce(sendBuf, recvBuf, count, ncclInt, ncclSum, comm, stream));
+  }
+
+  EXPECT_TRUE(comm->collTrace != nullptr);
+  comm->collTrace->waitForWorkerFinishQueue();
+
+  // schedule more after the first 10 coll are finished
+  for (int i = 0; i < nColl; i++) {
+    NCCLCHECK_TEST(
+        ncclAllReduce(sendBuf, recvBuf, count, ncclInt, ncclSum, comm, stream));
+  }
+
+  auto dump = comm->collTrace->dumpTrace();
+
+  EXPECT_TRUE(dump.pastColls.size() >= nColl);
+  // +1 for the extra wakeup event that might be created by dumpTrace() function
+  EXPECT_TRUE(dump.pendingColls.size() <= nColl);
+
+  NCCLCHECK_TEST(ncclCommDestroy(comm));
+
   NCCL_COLLTRACE.clear();
 }
 

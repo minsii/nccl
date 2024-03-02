@@ -1,13 +1,17 @@
 // (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
 #include "CollTrace.h"
-#include <string>
 #include "FbInternal.h"
 #include "bootstrap.h"
 #include "comm.h"
 #include "nccl.h"
+#include "ExtChecks.h"
 
 #include <CtranUtils.h>
+#include <algorithm>
+#include <memory>
+#include <mutex>
+#include <string>
 #include <unistd.h>
 #include <chrono>
 #include <fstream>
@@ -77,22 +81,41 @@ CollTrace::CollTrace(ncclComm* comm) : comm_(comm) {
 }
 
 CollTrace::~CollTrace() {
-  INFO(
-      NCCL_INIT,
-      "COLLTRACE: comm %p commHash %lu rank %d - Destroy START",
-      comm_,
-      comm_->commHash,
-      comm_->rank);
+  try {
+    INFO(
+        NCCL_INIT,
+        "COLLTRACE: comm %p commHash %lu rank %d - Destroy START",
+        comm_,
+        comm_->commHash,
+        comm_->rank);
 
-  workerThreadExitSignal_ = true;
-  profilingWorkerThread_.join();
+    eventQueue_.push(
+      std::unique_ptr<EventInfo>(new EventInfo(EventInfo::EventType::TERMINATE)));
+    if (profilingWorkerThread_.joinable()) {
+      profilingWorkerThread_.join();
+    }
 
-  INFO(
-      NCCL_INIT,
-      "COLLTRACE: comm %p commHash %lu rank %d - Destroy COMPLETE",
-      comm_,
-      comm_->commHash,
-      comm_->rank);
+    INFO(
+        NCCL_INIT,
+        "COLLTRACE: comm %p commHash %lu rank %d - Destroy COMPLETE",
+        comm_,
+        comm_->commHash,
+        comm_->rank);
+  } catch (const std::exception& e) {
+    WARN(
+        "COLLTRACE: comm %p commHash %lu rank %d - Destroy FAILED: %s",
+        comm_,
+        comm_->commHash,
+        comm_->rank,
+        e.what());
+  }
+  catch(...) {
+    WARN(
+        "COLLTRACE: comm %p commHash %lu rank %d - Destroy FAILED: Unkown exception",
+        comm_,
+        comm_->commHash,
+        comm_->rank);
+  }
 }
 
 void CollTrace::outputResults() {
@@ -131,15 +154,14 @@ void CollTrace::outputResults() {
 }
 
 CollTrace::CollTraceDump CollTrace::dumpTrace() {
-  CollTraceDump dump {};
-  if (curEvent_ != nullptr) {
+  std::lock_guard<std::mutex> lock(workerMutex_);
+  CollTraceDump dump{};
+  if (curEventState_ == EventState::IN_PROGRESS) {
     dump.currentColl = curEvent_;
     dump.currentCollState = curEventState_;
   }
 
   dump.pendingColls = eventQueue_.dumpQueue();
-  // For now we will assume the collTraceThread is either finished or hang.
-  // TODO: add a lock to protect the dump process.
   dump.pastColls = results_;
   return dump;
 }
@@ -149,8 +171,7 @@ void* CollTrace::collTraceThreadFn(CollTrace* ct) {
 }
 
 void* CollTrace::collTraceThreadFnImpl() {
-  ncclResult_t res = ncclSuccess;
-  CUDACHECKGOTO(cudaSetDevice(comm_->cudaDev), res, fail);
+  CUDACHECKTHROW(cudaSetDevice(comm_->cudaDev));
 
   INFO(
       NCCL_INIT,
@@ -160,100 +181,121 @@ void* CollTrace::collTraceThreadFnImpl() {
       comm_->rank);
 
   while (true) {
-    curEvent_ = eventQueue_.tryPop();
-    // Fixme: think of a better word to describe the state of the current event
-    // here we are actually "uncertain" what is the current state of the event
-    // rather than we know the event is waiting to be processed.
     curEventState_ = EventState::PENDING;
-    if (curEvent_) {
-      if (curEvent_->info.count != 0) {
-        curEventState_ = EventState::IN_PROGRESS;
-        cudaError_t res = cudaEventSynchronize(curEvent_->stop.get());
-        curEventState_ = EventState::DONE;
-        float latency = -1;
-        res = res == cudaSuccess
-            ? cudaEventElapsedTime(
-                  &latency, curEvent_->start.get(), curEvent_->stop.get())
-            : res;
-        ResultInfo result;
-        result.opCount = curEvent_->opCount;
-        result.info = curEvent_->info;
-        result.stream = curEvent_->stream;
-        if (res == cudaSuccess) {
-          result.latency = latency;
-        }
-        result.iteration = curEvent_->iteration;
-        results_.push_back(result);
-
-        // Free the event objects
-        eventPool_.add(std::move(curEvent_->start));
-        eventPool_.add(std::move(curEvent_->stop));
-
-        // FIXME: cannot record protocol for sendrecvs since a grouped sendrecv
-        // may contain multiple protocols
-        if (features & CollTrace::Features::FB_IO_DURING_RUN) {
-          COLLTRACE_IO_FB_DURING_RUN(result, comm_->rank);
-        }
-
-        if (features & CollTrace::Features::VERBOSE) {
-          INFO(
-              NCCL_COLL,
-              "COLLTRACE: opCount %lx %s sendbuff %p recvbuff %p count %ld datatype %s op %s root %d algorithm %s protocol %s nchannels %d nthreads %d latency %.2f us",
-              result.opCount,
-              result.info.opName,
-              result.info.sendbuff,
-              result.info.recvbuff,
-              result.info.count,
-              getDatatypeStr(result.info.datatype).c_str(),
-              getRedOpStr(result.info.op).c_str(),
-              result.info.root,
-              result.info.algorithm >= 0 ? ncclAlgoStr[result.info.algorithm]
-                                         : "N/A",
-              result.info.protocol >= 0 ? ncclProtoStr[result.info.protocol]
-                                        : "N/A",
-              result.info.nChannels,
-              result.info.nThreads,
-              result.latency * 1000);
-        }
-
-        // FIXME: we should revisit bootstrapAllGather() here since commAbort
-        // may be called either on local rank or a remote rank causing socket
-        // failure
-        if (comm_->tuner != NULL &&
-            features & CollTrace::Features::ONLINE_TUNING) {
-          // Online tuning - average latencies across ranks & send to tuner
-          float* latencies = NULL;
-          NCCLCHECKIGNORE(ncclCalloc(&latencies, curEvent_->info.comm->nRanks));
-          latencies[curEvent_->info.comm->rank] = latency;
-          NCCLCHECKIGNORE(bootstrapAllGather(
-              curEvent_->info.comm->bootstrap, latencies, sizeof(float)));
-          float sum = 0.0;
-          for (int i = 0; i < curEvent_->info.comm->nRanks; i++) {
-            sum += latencies[i];
-          }
-
-          free(latencies);
-          sum /= (float)curEvent_->info.comm->nRanks;
-
-          curEvent_->info.comm->tuner->addOnlineResult(
-              curEvent_->info.coll,
-              curEvent_->info.count * ncclTypeSize(curEvent_->info.datatype),
-              curEvent_->iteration,
-              sum,
-              curEvent_->info.algorithm,
-              curEvent_->info.protocol,
-              curEvent_->info.nChannels,
-              curEvent_->info.nThreads);
-        }
-      }
     curEvent_ = nullptr;
-    } else {
-      if (workerThreadExitSignal_ && eventQueue_.isEmpty()) {
-        outputResults();
-        break;
+
+    // For testing purpose only. During testing, we want to ensure the worker
+    // thread reached a steady state before dumping so that the trace dump
+    // result is predictable. Otherwise the test can be flaky.
+    if (waitingForQueueEmpty_ && eventQueue_.isEmpty()) {
+      {
+        std::unique_lock<std::mutex> lock(waitQueueEmptyMutex_);
+        waitingForQueueEmpty_ = false;
       }
+      waitQueueEmptyCv_.notify_all();
+    }
+
+    // We intentionally didn't hold the event queue lock till curEvent is
+    // updated. That will potentially create deadlock.
+    // Downside of current approach is we might miss one pending event in the
+    // dump in very rare occasion. But since the worker thread haven't started
+    // to wait for the event, it should be fine.
+    {
+      auto tmp_event = eventQueue_.waitPop();
+      std::lock_guard<std::mutex> lock(workerMutex_);
+      curEvent_ = std::move(tmp_event);
+    }
+
+    if (curEvent_->eventType == EventInfo::EventType::TERMINATE) {
+      break;
+    } else if (curEvent_->eventType == EventInfo::EventType::WAKE_UP) {
+      continue;
+    }
+    curEventState_ = EventState::IN_PROGRESS;
+    cudaError_t res = cudaEventSynchronize(curEvent_->stop.get());
+    curEventState_ = EventState::DONE;
+    float latency = -1;
+
+    if (res == cudaSuccess) {
+      res = cudaEventElapsedTime(&latency, curEvent_->start.get(), curEvent_->stop.get());
+    }
+
+    ResultInfo result{
+      .opCount= curEvent_->opCount,
+      .info = curEvent_->info,
+      .stream = curEvent_->stream,
+      .iteration = curEvent_->iteration,
+      .latency = res == cudaSuccess? latency: -1,
+    };
+
+    {
+      std::lock_guard<std::mutex> lock(workerMutex_);
+      results_.push_back(result);
+    }
+
+    // Free the event objects
+    eventPool_.add(std::move(curEvent_->start));
+    eventPool_.add(std::move(curEvent_->stop));
+
+    // FIXME: cannot record protocol for sendrecvs since a grouped sendrecv
+    // may contain multiple protocols
+    if (features & CollTrace::Features::FB_IO_DURING_RUN) {
+      COLLTRACE_IO_FB_DURING_RUN(result, comm_->rank);
+    }
+
+    if (features & CollTrace::Features::VERBOSE) {
+      INFO(
+          NCCL_COLL,
+          "COLLTRACE: opCount %lx %s sendbuff %p recvbuff %p count %ld datatype %s op %s root %d algorithm %s protocol %s nchannels %d nthreads %d latency %.2f us",
+          result.opCount,
+          result.info.opName,
+          result.info.sendbuff,
+          result.info.recvbuff,
+          result.info.count,
+          getDatatypeStr(result.info.datatype).c_str(),
+          getRedOpStr(result.info.op).c_str(),
+          result.info.root,
+          result.info.algorithm >= 0 ? ncclAlgoStr[result.info.algorithm]
+                                      : "N/A",
+          result.info.protocol >= 0 ? ncclProtoStr[result.info.protocol]
+                                    : "N/A",
+          result.info.nChannels,
+          result.info.nThreads,
+          result.latency * 1000);
+    }
+
+    // FIXME: we should revisit bootstrapAllGather() here since commAbort
+    // may be called either on local rank or a remote rank causing socket
+    // failure
+    if (comm_->tuner != NULL &&
+        features & CollTrace::Features::ONLINE_TUNING) {
+      // Online tuning - average latencies across ranks & send to tuner
+      float* latencies = NULL;
+      NCCLCHECKIGNORE(ncclCalloc(&latencies, curEvent_->info.comm->nRanks));
+      latencies[curEvent_->info.comm->rank] = latency;
+      NCCLCHECKIGNORE(bootstrapAllGather(
+          curEvent_->info.comm->bootstrap, latencies, sizeof(float)));
+      float sum = 0.0;
+      for (int i = 0; i < curEvent_->info.comm->nRanks; i++) {
+        sum += latencies[i];
+      }
+
+      free(latencies);
+      sum /= (float)curEvent_->info.comm->nRanks;
+
+      curEvent_->info.comm->tuner->addOnlineResult(
+          curEvent_->info.coll,
+          curEvent_->info.count * ncclTypeSize(curEvent_->info.datatype),
+          curEvent_->iteration,
+          sum,
+          curEvent_->info.algorithm,
+          curEvent_->info.protocol,
+          curEvent_->info.nChannels,
+          curEvent_->info.nThreads);
     }
   }
+
+  outputResults();
 
   INFO(
       NCCL_INIT,
@@ -261,11 +303,7 @@ void* CollTrace::collTraceThreadFnImpl() {
       comm_,
       comm_->commHash,
       comm_->rank);
-  return NULL;
-
-fail:
-  WARN("COLLTRACE: error occured on worker thread, return error %d", res);
-  return NULL;
+  return nullptr;
 }
 
 std::unique_ptr<EventInfo> CollTrace::getEventFromPool() {
@@ -283,6 +321,14 @@ void CollTrace::enqueueEvent(std::unique_ptr<EventInfo> eventInfo) {
   eventQueue_.push(std::move(eventInfo));
 }
 
+void CollTrace::waitForWorkerFinishQueue() {
+  std::unique_lock<std::mutex> waitLock(waitQueueEmptyMutex_);
+  waitingForQueueEmpty_ = true;
+  eventQueue_.push(
+  std::unique_ptr<EventInfo>(new EventInfo(EventInfo::EventType::WAKE_UP)));
+  waitQueueEmptyCv_.wait(waitLock, [this] { return !waitingForQueueEmpty_; });
+}
+
 ncclResult_t collTraceInit(ncclComm* comm) {
   try {
     if (!NCCL_COLLTRACE.empty()) {
@@ -296,13 +342,11 @@ ncclResult_t collTraceInit(ncclComm* comm) {
 }
 
 ncclResult_t collTraceDestroy(ncclComm* comm) {
-  try {
-    if (comm->collTrace) {
-      comm->collTrace.reset();
-    }
-  } catch (const std::exception& e) {
-    WARN("COLLTRACE destruction failed: %s\n", e.what());
-    return ncclInternalError;
+  if (comm->collTrace) {
+    comm->collTrace.reset();
   }
+  // Try catch clause here is not going to be useful as destructors are noexcept
+  // by default. Instead of throwing an exception it will just crash the program.
+  // We need to think about a better way to handle this.
   return ncclSuccess;
 }
