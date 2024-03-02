@@ -73,7 +73,7 @@ CollTrace::CollTrace(ncclComm* comm) : comm_(comm) {
   std::string enabledFeaturesStr = vecToStr(enabledFeatures);
   INFO(
       NCCL_INIT,
-      "COLLTRACE: comm %p commHash %lu rank %d enabled features: %s - Init COMPLETE",
+      "COLLTRACE: comm %p commHash %lx rank %d enabled features: %s - Init COMPLETE",
       comm,
       comm->commHash,
       comm->rank,
@@ -84,7 +84,7 @@ CollTrace::~CollTrace() {
   try {
     INFO(
         NCCL_INIT,
-        "COLLTRACE: comm %p commHash %lu rank %d - Destroy START",
+        "COLLTRACE: comm %p commHash %lx rank %d - Destroy START",
         comm_,
         comm_->commHash,
         comm_->rank);
@@ -97,13 +97,13 @@ CollTrace::~CollTrace() {
 
     INFO(
         NCCL_INIT,
-        "COLLTRACE: comm %p commHash %lu rank %d - Destroy COMPLETE",
+        "COLLTRACE: comm %p commHash %lx rank %d - Destroy COMPLETE",
         comm_,
         comm_->commHash,
         comm_->rank);
   } catch (const std::exception& e) {
     WARN(
-        "COLLTRACE: comm %p commHash %lu rank %d - Destroy FAILED: %s",
+        "COLLTRACE: comm %p commHash %lx rank %d - Destroy FAILED: %s",
         comm_,
         comm_->commHash,
         comm_->rank,
@@ -111,7 +111,7 @@ CollTrace::~CollTrace() {
   }
   catch(...) {
     WARN(
-        "COLLTRACE: comm %p commHash %lu rank %d - Destroy FAILED: Unkown exception",
+        "COLLTRACE: comm %p commHash %lx rank %d - Destroy FAILED: Unkown exception",
         comm_,
         comm_->commHash,
         comm_->rank);
@@ -175,7 +175,7 @@ void* CollTrace::collTraceThreadFnImpl() {
 
   INFO(
       NCCL_INIT,
-      "COLLTRACE: comm %p commHash %lu rank %d - worker thread STARTED",
+      "COLLTRACE: comm %p commHash %lx rank %d - worker thread STARTED",
       comm_,
       comm_->commHash,
       comm_->rank);
@@ -299,7 +299,7 @@ void* CollTrace::collTraceThreadFnImpl() {
 
   INFO(
       NCCL_INIT,
-      "COLLTRACE: comm %p commHash %lu rank %d - worker thread TERMINATE",
+      "COLLTRACE: comm %p commHash %lx rank %d - worker thread TERMINATE",
       comm_,
       comm_->commHash,
       comm_->rank);

@@ -26,7 +26,7 @@ int main(int argc, char* argv[]) {
 #ifdef NCCL_COMM_GET_UNIQUE_HASH
   uint64_t ncclCommHash;
   NCCLCHECK(ncclCommGetUniqueHash(comm, &ncclCommHash));
-  printf("ncclCommHash %lu\n", ncclCommHash);
+  printf("ncclCommHash %lx\n", ncclCommHash);
 #endif
 
   CUDACHECK(cudaFree(userBuff));

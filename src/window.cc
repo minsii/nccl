@@ -88,7 +88,7 @@ ncclResult_t ncclWinAllocShared(size_t size, ncclComm_t comm, ncclWin_t* win) {
     win_->remotePtrs[i] = remoteAddr;
     INFO(
         NCCL_INIT,
-        "Rank %d Opened IPC handle for rank %d with remoteAddr %p in ncclWin %p on ncclComm %p (nNodes=%d, nRanks=%d, localRanks=%d, commHash=%lu)",
+        "Rank %d Opened IPC handle for rank %d with remoteAddr %p in ncclWin %p on ncclComm %p (nNodes=%d, nRanks=%d, localRanks=%d, commHash=%lx)",
         comm->rank,
         i,
         remoteAddr,
@@ -127,7 +127,7 @@ NCCL_API(ncclResult_t, ncclWinFree, ncclComm_t comm, ncclWin_t win);
 ncclResult_t ncclWinFree(ncclComm_t comm, ncclWin_t win) {
   INFO(
         NCCL_INIT,
-        "Rank %d freeing ncclWin %p on ncclComm %p (nNodes=%d, nRanks=%d, localRanks=%d, commHash=%lu)",
+        "Rank %d freeing ncclWin %p on ncclComm %p (nNodes=%d, nRanks=%d, localRanks=%d, commHash=%lx)",
         comm->rank,
         win,
         comm,

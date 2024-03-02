@@ -1572,7 +1572,7 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   INFO(NCCL_INIT,"comm %p rank %d commId 0x%llx - Init bootstrap COMPLETE in %.2f ms", comm, comm->rank, (unsigned long long)hashUniqueId(job->commId), timerDeltaMs);
   timerBegin = std::chrono::steady_clock::now();
 
-  INFO(NCCL_INIT,"comm %p rank %d nranks %d cudaDev %d nvmlDev %d busId %lx commId 0x%llx commHash %lu - Init START",
+  INFO(NCCL_INIT,"comm %p rank %d nranks %d cudaDev %d nvmlDev %d busId %lx commId 0x%llx commHash %lx - Init START",
        comm, comm->rank, comm->nRanks, comm->cudaDev, comm->nvmlDev, comm->busId, (unsigned long long)hashUniqueId(job->commId), comm->commHash);
 
   NCCLCHECKGOTO(initTransportsRank(comm, job->parent), res, fail);
@@ -1603,7 +1603,7 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   NCCLCHECKGOTO(collTraceInit(comm), res, fail);
 
   timerDeltaMs = std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - timerBegin).count() * 1000;
-  INFO(NCCL_INIT,"comm %p rank %d nranks %d localrank %d localranks %d cudaDev %d nvmlDev %d busId %lx commId 0x%llx commHash %lu - Init COMPLETE in %.2f ms",
+  INFO(NCCL_INIT,"comm %p rank %d nranks %d localrank %d localranks %d cudaDev %d nvmlDev %d busId %lx commId 0x%llx commHash %lx - Init COMPLETE in %.2f ms",
        comm, comm->rank, comm->nRanks, comm->localRank, comm->localRanks, comm->cudaDev, comm->nvmlDev, comm->busId,
        (unsigned long long)hashUniqueId(job->commId), comm->commHash, timerDeltaMs);
 
@@ -1807,7 +1807,7 @@ static ncclResult_t ncclCommInitWorld(const ncclComm_t comm) {
   if (!ncclCommWorld) {
     NCCLCHECK(ncclCalloc(&ncclCommWorld, 1));
     NCCLCHECKGOTO(ncclCommDup(ncclCommWorld, comm), res, exit);
-    INFO(NCCL_INIT, "Initialized ncclCommWorld for nRanks=%d, nNodes=%d, localRanks=%d, commHash=%ld",
+    INFO(NCCL_INIT, "Initialized ncclCommWorld for nRanks=%d, nNodes=%d, localRanks=%d, commHash=%lx",
       ncclCommWorld->nRanks,
       ncclCommWorld->nNodes,
       ncclCommWorld->localRanks,

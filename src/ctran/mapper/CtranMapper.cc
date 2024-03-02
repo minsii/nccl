@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include "CtranMapperImpl.h"
 #include "CtranTopoFile.h"
+#include "ExtUtils.h"
 #include "FbInternal.h"
 #include "bootstrap.h"
 #include "comm.h"
@@ -221,7 +222,7 @@ CtranMapper::CtranMapper(ncclComm* comm) {
 void CtranMapper::reportRegSnapshot(void) {
   INFO(
       NCCL_INIT,
-      "CTRAN-MAPPER: [register snapshot] buffer registration with commHash %lu: "
+      "CTRAN-MAPPER: [register snapshot] buffer registration with commHash %lx: "
       "total cached %u total registered %u total dynamically registered %u, total lookup hits %u misses %u",
       this->commHash,
       this->pimpl_->totalNumCachedRegistrations,
@@ -287,7 +288,7 @@ void CtranMapper::reportProfiling(bool flush) {
           NCCL_CTRAN_KINETO_PROFILE_DIR + std::string("/nccl_ctran_log.") +
           std::to_string(pid) + std::string(".rank") +
           std::to_string(this->rank) + "." + std::string(hostname) +
-          std::string(".comm") + std::to_string(this->commHash) +
+          std::string(".comm") + hashToHexStr(this->commHash) +
           std::string(".") + std::to_string(reportCnt++) +
           std::string(".json"));
       INFO(NCCL_ALL, "Dumping ctran profile to %s\n", filename.c_str());
@@ -828,7 +829,7 @@ void CtranMapper::bootstrapTopology(ncclComm* comm) {
     for (int rank = 0; rank < comm->nRanks; rank++) {
       std::string s{
           "CTRAN topoInfo -- Rank " + std::to_string(rank) + " CommHash " +
-          std::to_string(comm->commHash) + ": "};
+          hashToHexStr(this->commHash) + ": "};
       for (int keyId = 0; keyId < nkeys; keyId++) {
         (*this->topoInfo)[rank][keyId] = topoBuf[rank * nkeys + keyId];
         s += std::to_string((*this->topoInfo)[rank][keyId]);

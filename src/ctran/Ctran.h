@@ -59,7 +59,7 @@
   do {                                                                                                                                       \
     INFO(                                                                                                                                    \
         NCCL_COLL,                                                                                                                           \
-        "%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d peer %d comm %p commHash %lu [nranks=%d, localRanks=%d] stream=%p\n", \
+        "%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d peer %d comm %p commHash %lx [nranks=%d, localRanks=%d] stream=%p\n", \
         algoStr,                                                                                                                             \
         comm->opCount,                                                                                                                       \
         sendbuff,                                                                                                                            \
