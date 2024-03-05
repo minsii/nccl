@@ -7,7 +7,7 @@
 #include "nccl.h"
 #include "ExtChecks.h"
 
-#include <CtranUtils.h>
+#include "ExtUtils.h"
 #include <algorithm>
 #include <memory>
 #include <mutex>
@@ -222,9 +222,9 @@ void* CollTrace::collTraceThreadFnImpl() {
 
     ResultInfo result{
       .opCount= curEvent_->opCount,
-      .info = curEvent_->info,
-      .stream = curEvent_->stream,
-      .iteration = curEvent_->iteration,
+        .info = curEvent_->info,
+        .stream = curEvent_->stream,
+        .iteration = curEvent_->iteration,
       .latency = res == cudaSuccess? latency: -1,
     };
 
@@ -256,7 +256,7 @@ void* CollTrace::collTraceThreadFnImpl() {
           getRedOpStr(result.info.op).c_str(),
           result.info.root,
           result.info.algorithm >= 0 ? ncclAlgoStr[result.info.algorithm]
-                                      : "N/A",
+                                     : "N/A",
           result.info.protocol >= 0 ? ncclProtoStr[result.info.protocol]
                                     : "N/A",
           result.info.nChannels,
@@ -325,7 +325,7 @@ void CollTrace::waitForWorkerFinishQueue() {
   std::unique_lock<std::mutex> waitLock(waitQueueEmptyMutex_);
   waitingForQueueEmpty_ = true;
   eventQueue_.push(
-  std::unique_ptr<EventInfo>(new EventInfo(EventInfo::EventType::WAKE_UP)));
+      std::unique_ptr<EventInfo>(new EventInfo(EventInfo::EventType::WAKE_UP)));
   waitQueueEmptyCv_.wait(waitLock, [this] { return !waitingForQueueEmpty_; });
 }
 

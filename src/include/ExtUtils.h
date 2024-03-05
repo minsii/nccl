@@ -4,10 +4,27 @@
 
 #include <cstdint>
 #include <sstream>
+#include <vector>
 
-std::string hashToHexStr(const uint64_t hash) {
+static inline std::string hashToHexStr(const uint64_t hash) {
   std::stringstream ss;
   ss << std::hex << hash;
+  return ss.str();
+}
+
+template <typename T>
+static inline std::string vecToStr(
+    const std::vector<T>& vec,
+    const std::string& delim = ", ") {
+  std::stringstream ss;
+  bool first = true;
+  for (auto it : vec) {
+    if (!first) {
+      ss << delim;
+    }
+    ss << it;
+    first = false;
+  }
   return ss.str();
 }
 
