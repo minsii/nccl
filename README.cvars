@@ -800,7 +800,7 @@ Default: -2
 NCCL_MAX_P2P_NCHANNELS
 Description:
     Hidden variable. No description provided.
-Type: int64_t
+Type: int
 Default: MAX
 
 NCCL_MEM_SYNC_DOMAIN
@@ -844,7 +844,7 @@ Default: -2
 NCCL_MIN_P2P_NCHANNELS
 Description:
     Hidden variable. No description provided.
-Type: int64_t
+Type: int
 Default: 1
 
 NCCL_NCHANNELS_PER_NET_PEER

@@ -69,13 +69,13 @@
      Hidden variable. No description provided.
 
  - name        : NCCL_MIN_P2P_NCHANNELS
-   type        : int64_t
+   type        : int
    default     : 1
    description : |-
      Hidden variable. No description provided.
 
  - name        : NCCL_MAX_P2P_NCHANNELS
-   type        : int64_t
+   type        : int
    default     : MAX
    description : |-
      Hidden variable. No description provided.
@@ -784,13 +784,13 @@ static int nextPow2(int v) {
 
 ncclResult_t ncclTopoComputeP2pChannels(struct ncclComm* comm) {
   /* here we already honor comm->max/minCTAs for p2pnChannels. */
-  int maxChannels = std::min((int) NCCL_MAX_P2P_NCHANNELS, MAXCHANNELS);
+  int maxChannels = std::min(NCCL_MAX_P2P_NCHANNELS, MAXCHANNELS);
   if (comm->sharedRes->owner != comm) {
     comm->p2pnChannels = std::min(comm->nChannels, maxChannels);
-    comm->p2pnChannels = std::min(std::max(comm->p2pnChannels, (int)NCCL_MIN_P2P_NCHANNELS), comm->sharedRes->tpP2pNChannels);
+    comm->p2pnChannels = std::min(std::max(comm->p2pnChannels, NCCL_MIN_P2P_NCHANNELS), comm->sharedRes->tpP2pNChannels);
   } else {
     comm->p2pnChannels = std::min(comm->nChannels, maxChannels);
-    comm->p2pnChannels = std::max(comm->p2pnChannels, (int)NCCL_MIN_P2P_NCHANNELS);
+    comm->p2pnChannels = std::max(comm->p2pnChannels, NCCL_MIN_P2P_NCHANNELS);
   }
 
   int minChannels = comm->p2pnChannels;
