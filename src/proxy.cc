@@ -404,6 +404,9 @@ static ncclResult_t ncclProxyOpToArgs(struct ncclProxyOp* op, struct ncclProxyAr
   sub->nbytes = op->nbytes;
   sub->peer = op->root;
   args->nsubs = subIndex+1;
+
+  PROXY_TRACE_OP_TO_SUBARGS(sub, op);
+
   if (subIndex) {
     if ((args->sliceSteps != op->sliceSteps) ||
         (args->chunkSteps != op->chunkSteps) ||
@@ -561,6 +564,7 @@ static ncclResult_t SaveProxy(struct ncclComm* comm, struct ncclChannel* channel
 
   if (justInquire) *justInquire = true;
   else {
+    PROXY_TRACE_OP_UPDATE_REMOTE_RANK(op, peer);
     NCCLCHECK(ncclLocalOpAppend(comm, &connector->proxyConn, op));
   }
   return ncclSuccess;
@@ -632,7 +636,10 @@ ncclResult_t ncclProxySaveOp(struct ncclComm* comm, struct ncclProxyOp* op, bool
 }
 
 ncclResult_t ncclProxyComputeP2p(struct ncclInfo* info, struct ncclProxyOp* op) {
-  memset(op, 0, sizeof(struct ncclProxyOp));
+  // Cast to void* to avoid compiler warning "warning: ‘void* memset(void*, int,
+  // size_t)’ clearing an object of non-trivial type ‘struct ncclProxyOp’; use
+  // assignment or value-initialization instead [-Wclass-memaccess]"
+  memset((void*)op, 0, sizeof(struct ncclProxyOp));
   int channelId = info->channelId;
   struct ncclChannel* channel = info->comm->channels+channelId;
   op->channelId = channelId;
@@ -1621,6 +1628,8 @@ ncclResult_t ncclProxyCreate(struct ncclComm* comm) {
     proxyState->dmaBufSupport = comm->dmaBufSupport;
     proxyState->ncclNet = comm->ncclNet;
     proxyState->ncclCollNet = comm->ncclCollNet;
+    NCCLCHECK(proxyTraceInit(proxyState, comm));
+
     memcpy(proxyState->buffSizes, comm->buffSizes, sizeof(comm->buffSizes));
 
     pthread_create(&comm->proxyState->thread, NULL, ncclProxyService, comm->proxyState);
@@ -1675,6 +1684,8 @@ ncclResult_t ncclProxyDestroy(struct ncclComm* comm) {
   struct ncclProxyState* sharedProxyState = comm->sharedRes->proxyState;
 
   assert(sharedProxyState->refCount == 0);
+  NCCLCHECK(proxyTraceDestroy(sharedProxyState));
+
   free(sharedProxyState->peerAddresses);
   free(sharedProxyState->peerSocks);
   free(sharedProxyState->proxyOps);

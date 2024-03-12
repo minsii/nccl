@@ -442,6 +442,10 @@ static ncclResult_t addP2pToPlan(
   // Calculate the opCount after appendWorkElemP2p since it will always return
   // with channel->nWork equal to one plus the work index this p2p settled in.
   proxyOp.opCount = uint64_t(plan->channels[channelId].nWork)<<1 | 1;
+
+  info.nChannels = 1; // always 1 channel for each p2p op
+  PROXY_TRACE_INFO_COPY(proxyOp, info);
+
   NCCLCHECK(addProxyOpIfNeeded(comm, plan, &proxyOp));
   COLLTRACE_P2P_APPEND(comm, plan, info);
   return ncclSuccess;
@@ -642,6 +646,9 @@ static ncclResult_t scheduleCollTasksToPlan(
       }
 
       int maxChannels = info.algorithm == NCCL_ALGO_NVLS || aggInfo.algorithm == NCCL_ALGO_NVLS_TREE ? comm->nvlsChannels : comm->nChannels;
+      // proxyOp is duplicated for multiple channels within addCollToPlan,
+      // Thus, good to set common coll info once here.
+      PROXY_TRACE_INFO_COPY(proxyOp, info);
       NCCLCHECK(addCollToPlan(comm, plan, nWorkBudget, workFuncIndex, &workElem, &proxyOp,
         maxChannels, info.nChannels, info.nBytes, regBufUsed, regBufSend, regBufRecv));
       tasks->nTasksColl -= 1;

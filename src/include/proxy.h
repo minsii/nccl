@@ -14,6 +14,7 @@
 #include <pthread.h>
 #include "shm.h"
 #include "p2p.h"
+#include "ProxyTrace.h"
 
 enum ncclProxyOpState { ncclProxyOpNone, ncclProxyOpReady, ncclProxyOpProgress };
 
@@ -23,7 +24,7 @@ typedef ncclResult_t (*proxyProgressFunc_t)(struct ncclProxyState*, struct ncclP
 #define NCCL_PROXY_MAX_SUBS MAXCHANNELS
 static_assert(NCCL_MAX_WORK_ELEMENTS <= MAXCHANNELS, "Not enough sub space for max work elements");
 
-struct ncclProxyOp {
+struct alignas(64) ncclProxyOp {
   struct ncclProxyConnection* connection;
   int channelId;
   int nsteps;
@@ -45,8 +46,11 @@ struct ncclProxyOp {
     // For use by enqueue.cc
     struct ncclProxyOp *enqNext;
   };
+
+  struct ProxyTraceArgs traceArgs;
 };
-static_assert(sizeof(struct ncclProxyOp) == 64, "Keep ProxyOp aligned with cache lines for effective prefetch");
+// As we add more fields, we can no longer be smaller than 64 bytes, thus just keep alignment
+// static_assert(sizeof(struct ncclProxyOp) == 64, "Keep ProxyOp aligned with cache lines for effective prefetch");
 
 struct ncclProxySubArgs {
   struct ncclProxyConnection* connection;
@@ -65,6 +69,8 @@ struct ncclProxySubArgs {
   uint64_t end;
   void* requests[NCCL_STEPS];
   void* profilingEvents[NCCL_STEPS];
+
+  struct ProxyTraceArgs traceArgs;
 };
 
 struct ncclProxyArgs {
@@ -214,6 +220,8 @@ struct ncclProxyState {
 
   // Queue of expected responses from the proxy
   struct ncclExpectedProxyResponse* expectedResponses;
+
+  std::unique_ptr<ProxyTrace> trace{nullptr};
 };
 
 enum proxyConnectState {
