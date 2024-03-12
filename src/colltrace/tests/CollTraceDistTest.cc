@@ -287,6 +287,52 @@ TEST_F(CollTraceTest, DumpWithUnfinished) {
   NCCL_COLLTRACE.clear();
 }
 
+TEST_F(CollTraceTest, TestScubaDump) {
+  #ifndef ENABLE_FB_INTERNAL
+  GTEST_SKIP() << "This test requires FB internal build";
+  #endif
+
+  setenv("NCCL_COLL_TRACE_SCUBA_TEST", "true", 0);
+  // overwrite CollTrace features before creating comm
+  NCCL_COLLTRACE.push_back("fb");
+  ncclComm_t comm =
+      createNcclComm(this->globalRank, this->numRanks, this->localRank);
+  const int count = 1048576;
+  const int nColl = 10;
+
+  testing::internal::CaptureStdout();
+
+  prepareAllreduce(count);
+  for (int i = 0; i < nColl; i++) {
+    NCCLCHECK_TEST(
+        ncclAllReduce(sendBuf, recvBuf, count, ncclInt, ncclSum, comm, stream));
+  }
+
+  EXPECT_TRUE(comm->collTrace != nullptr);
+  comm->collTrace->waitForWorkerFinishQueue();
+
+  auto dump = comm->collTrace->dumpTrace();
+
+  std::string output = testing::internal::GetCapturedStdout();
+  for (auto& coll : dump.pastColls) {
+    std::stringstream ss;
+    ss << "COLLTRACE TEST: logging to scuba: "
+       << "stream: " << std::hex << reinterpret_cast<uint64_t>(coll.stream)
+       << "iteration: " << std::hex << coll.iteration
+       << "opName: " << coll.info.opName
+       << "sendbuff: " << std::hex << reinterpret_cast<uint64_t>(coll.info.sendbuff)
+       << "recvbuff: " << std::hex << reinterpret_cast<uint64_t>(coll.info.recvbuff)
+       << "count: " << std::hex << static_cast<uint64_t>(coll.info.count)
+       << std::endl;
+    std::string traceLog = ss.str();
+    EXPECT_THAT(output, testing::HasSubstr(traceLog));
+  }
+
+  NCCLCHECK_TEST(ncclCommDestroy(comm));
+
+  NCCL_COLLTRACE.clear();
+}
+
 int main(int argc, char* argv[]) {
   ::testing::InitGoogleTest(&argc, argv);
   ::testing::AddGlobalTestEnvironment(new MPIEnvironment);
