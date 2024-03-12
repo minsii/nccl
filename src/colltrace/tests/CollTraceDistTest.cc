@@ -317,6 +317,8 @@ TEST_F(CollTraceTest, TestScubaDump) {
   for (auto& coll : dump.pastColls) {
     std::stringstream ss;
     ss << "COLLTRACE TEST: logging to scuba: "
+       << "commHash: " << std::hex << coll.info.comm->commHash
+       << "opCount: " << std::hex << coll.opCount
        << "stream: " << std::hex << reinterpret_cast<uint64_t>(coll.stream)
        << "iteration: " << std::hex << coll.iteration
        << "opName: " << coll.info.opName
