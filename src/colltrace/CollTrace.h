@@ -156,8 +156,6 @@ class CollTrace {
     }
   };
 
-  void outputResults();
-
  private:
   // cudaEvent pool to avoid cudaEvent destory during run and enable reuse.
   SharedPool eventPool_;
@@ -202,6 +200,10 @@ class CollTrace {
   void enqueueEvent(std::unique_ptr<EventInfo> eventInfo);
 
   void waitForWorkerFinishQueue();
+
+  // Dump results to file. File path is specified by NCCL_COLLTRACE_DIR
+  // Return true if dumping is successful, otherwise false.
+  bool dumpResultsToFile();
 };
 
 ncclResult_t collTraceInit(ncclComm* comm);

@@ -1,15 +1,22 @@
 // (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
 #include <CollTrace.h>
+#include <ExtUtils.h>
 #include <comm.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <nccl.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <cstddef>
+#include <exception>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
 #include <sstream>
 #include "Ctran.h"
 #include "checks.h"
+#include "json/json.h"
 #include "nccl_cvars.h"
 #include "tests_common.cuh"
 
@@ -61,6 +68,24 @@ class CollTraceTest : public ::testing::Test {
   void prepareSendRecv(const int count) {
     CUDACHECK_TEST(cudaMalloc(&sendBuf, count * sizeof(int)));
     CUDACHECK_TEST(cudaMalloc(&recvBuf, count * sizeof(int)));
+  }
+
+  bool prepareDumpDir(const std::string &dir) {
+    try {
+      // always re-create a fresh dir to ensure output files are up-to-date
+      if (std::filesystem::exists(dir)) {
+        std::filesystem::remove_all(dir);
+      }
+      std::filesystem::create_directories(dir);
+    } catch (const std::exception& e) {
+      printf(
+          "Rank %d failed to create directory %s: %s\n",
+          this->globalRank,
+          dir.c_str(),
+          e.what());
+      return false;
+    }
+    return true;
   }
 
  protected:
@@ -331,7 +356,71 @@ TEST_F(CollTraceTest, TestScubaDump) {
   }
 
   NCCLCHECK_TEST(ncclCommDestroy(comm));
+  NCCL_COLLTRACE.clear();
+}
 
+TEST_F(CollTraceTest, ReportToLog) {
+  // overwrite CollTrace features before creating comm
+  NCCL_COLLTRACE.push_back("file");
+  NCCL_COLLTRACE_DIR = "/tmp/colltrace_test";
+
+  if (!prepareDumpDir(NCCL_COLLTRACE_DIR)) {
+    GTEST_SKIP() << "Failed to create dump directory. Skipping test.";
+  }
+
+  ncclComm_t comm =
+      createNcclComm(this->globalRank, this->numRanks, this->localRank);
+  const int count = 1048576;
+  const int nColl = 10;
+
+  prepareAllreduce(count);
+  for (int i = 0; i < nColl; i++) {
+    NCCLCHECK_TEST(
+        ncclAllReduce(sendBuf, recvBuf, count, ncclInt, ncclSum, comm, stream));
+  }
+  CUDACHECK_TEST(cudaStreamSynchronize(stream));
+
+  // CollTrace thread can be slower on remote execution, thus the results may
+  // not be filled yet. Explictly wait for the results to be filled.
+  EXPECT_TRUE(comm->collTrace != nullptr);
+  comm->collTrace->waitForWorkerFinishQueue();
+
+  EXPECT_TRUE(comm->collTrace->dumpResultsToFile());
+
+  // Each rank checks the file dumped for itself
+  const std::string fname = NCCL_COLLTRACE_DIR + "/comm" +
+      hashToHexStr(comm->commHash) + "_rank" + std::to_string(comm->rank) +
+      "_online.json";
+  EXPECT_TRUE(std::filesystem::exists(fname));
+
+  printf("Checking dumped file %s\n", fname.c_str());
+
+  std::ifstream logFile(fname);
+  Json::Value jsonLog;
+  logFile >> jsonLog;
+  uint64_t opCount = 0;
+  for (auto& entry : jsonLog) {
+    EXPECT_TRUE(entry.isMember("opCount"));
+    EXPECT_EQ(entry["opCount"].asUInt64(), opCount++);
+    EXPECT_TRUE(entry.isMember("coll"));
+    EXPECT_EQ(entry["coll"], "AllReduce");
+    EXPECT_TRUE(entry.isMember("msg_size"));
+    EXPECT_EQ(entry["msg_size"].asUInt64(), sizeof(int) * count);
+
+    // Do not seriously check value for following fields since we don't know
+    // the exact value.
+    EXPECT_TRUE(entry.isMember("protocol"));
+    EXPECT_TRUE(entry.isMember("algorithm"));
+    EXPECT_TRUE(entry.isMember("nChannels"));
+    EXPECT_GE(entry["nChannels"], 1);
+    EXPECT_TRUE(entry.isMember("nThreads"));
+    EXPECT_GE(entry["nThreads"], 1);
+    EXPECT_TRUE(entry.isMember("latency"));
+    EXPECT_GT(entry["latency"], 0);
+  }
+  logFile.close();
+
+  NCCLCHECK_TEST(ncclCommDestroy(comm));
   NCCL_COLLTRACE.clear();
 }
 

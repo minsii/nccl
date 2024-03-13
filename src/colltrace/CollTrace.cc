@@ -118,24 +118,37 @@ CollTrace::~CollTrace() {
   }
 }
 
-void CollTrace::outputResults() {
-  // If NCCL_COLLTRACE_DIR is set, then write profiling data to file
+bool CollTrace::dumpResultsToFile() {
   if (features & CollTrace::Features::FILE && !NCCL_COLLTRACE_DIR.empty()) {
+    // In case outputResults is called by user when worker thread is still
+    // running
+    std::lock_guard<std::mutex> lock(workerMutex_);
+
     std::stringstream stream;
     stream << "[\n  {\n";
     for (auto it = results_.begin(); it != results_.end(); ++it) {
       if (it != results_.begin()) {
         stream << "  },\n  {\n";
       }
+      std::string algoStr =
+          it->info.algorithm >= 0 ? ncclAlgoStr[it->info.algorithm] : "N/A";
+      std::string protoStr =
+          it->info.protocol >= 0 ? ncclProtoStr[it->info.protocol] : "N/A";
       stream << "    \"coll\": \"" << it->info.opName << "\",\n"
-             << "    \"msg_size\": \""
-             << (it->info.count * ncclTypeSize(it->info.datatype)) << "\",\n"
+             << "    \"opCount\": " << it->opCount << ",\n"
+             << "    \"msg_size\": "
+             << (it->info.count * ncclTypeSize(it->info.datatype)) << ",\n"
+             << "    \"algorithm\": \"" << algoStr << "\",\n"
+             << "    \"protocol\": \"" << protoStr << "\",\n"
+             << "    \"nChannels\": " << it->info.nChannels << ",\n"
+             << "    \"nThreads\": " << it->info.nThreads << ",\n"
              << "    \"latency\": " << it->latency << "\n";
     }
     stream << "  }\n]";
 
-    const std::string fileName =
-        NCCL_COLLTRACE_DIR + "/" + std::to_string(comm_->rank) + "_online.json";
+    const std::string fileName = NCCL_COLLTRACE_DIR + "/comm" +
+        hashToHexStr(comm_->commHash) + "_rank" + std::to_string(comm_->rank) +
+        "_online.json";
     INFO(
         NCCL_ALL,
         "COLLTRACE: rank %d writing %lu online profiler data to : %s",
@@ -150,7 +163,9 @@ void CollTrace::outputResults() {
       f << stream.str();
       f.close();
     }
+    return true;
   }
+  return false;
 }
 
 CollTrace::CollTraceDump CollTrace::dumpTrace() {
@@ -295,7 +310,7 @@ void* CollTrace::collTraceThreadFnImpl() {
     }
   }
 
-  outputResults();
+  dumpResultsToFile();
 
   INFO(
       NCCL_INIT,
