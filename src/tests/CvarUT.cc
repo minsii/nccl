@@ -3102,6 +3102,44 @@ TEST_F(CvarTest, NCCL_PROTO_value_1) {
   EXPECT_EQ(NCCL_PROTO, "val2_with_space");
 }
 
+TEST_F(CvarTest, NCCL_PROXYMOCK_NET_SEND_FAILURE_valuelist_0) {
+  setenv("NCCL_PROXYMOCK_NET_SEND_FAILURE", "val1,val2,val3", 1);
+  std::vector<std::string> vals{"val1","val2","val3"};
+  ncclCvarInit();
+  checkListValues<std::string>(vals, NCCL_PROXYMOCK_NET_SEND_FAILURE);
+}
+
+TEST_F(CvarTest, NCCL_PROXYMOCK_NET_SEND_FAILURE_valuelist_1) {
+  setenv("NCCL_PROXYMOCK_NET_SEND_FAILURE", "val1:1,val2:2,val3:3", 1);
+  std::vector<std::string> vals{"val1:1","val2:2","val3:3"};
+  ncclCvarInit();
+  checkListValues<std::string>(vals, NCCL_PROXYMOCK_NET_SEND_FAILURE);
+}
+
+TEST_F(CvarTest, NCCL_PROXYMOCK_NET_SEND_FAILURE_valuelist_2) {
+  setenv("NCCL_PROXYMOCK_NET_SEND_FAILURE", "val", 1);
+  std::vector<std::string> vals{"val"};
+  ncclCvarInit();
+  checkListValues<std::string>(vals, NCCL_PROXYMOCK_NET_SEND_FAILURE);
+}
+
+TEST_F(CvarTest, NCCL_PROXYMOCK_NET_SEND_FAILURE_valuelist_3) {
+  setenv("NCCL_PROXYMOCK_NET_SEND_FAILURE", "val1, val_w_space  ", 1);
+  std::vector<std::string> vals{"val1","val_w_space"};
+  ncclCvarInit();
+  checkListValues<std::string>(vals, NCCL_PROXYMOCK_NET_SEND_FAILURE);
+}
+
+TEST_F(CvarTest, NCCL_PROXYMOCK_NET_SEND_FAILURE_default_value) {
+  testDefaultValue("NCCL_PROXYMOCK_NET_SEND_FAILURE");
+  EXPECT_EQ(NCCL_PROXYMOCK_NET_SEND_FAILURE.size(), 0);
+}
+
+TEST_F(CvarTest, NCCL_PROXYMOCK_NET_SEND_FAILURE_warn_dup_val) {
+  setenv("NCCL_PROXYMOCK_NET_SEND_FAILURE", "dummy,dummy", 1);
+  testWarn("NCCL_PROXYMOCK_NET_SEND_FAILURE", "Duplicate token");
+}
+
 TEST_F(CvarTest, NCCL_PROXYTRACE_valuelist_0) {
   setenv("NCCL_PROXYTRACE", "val1,val2,val3", 1);
   std::vector<std::string> vals{"val1","val2","val3"};

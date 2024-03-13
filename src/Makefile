@@ -43,7 +43,7 @@ LIBSRCFILES += algorithms/AlgoDirector.cc \
                algorithms/allreduce/AlgoManagerAllReduce.cc
 LIBSRCFILES += collectives/all_to_allv.cc collectives/all_to_all.cc
 LIBSRCFILES += colltrace/CollTrace.cc
-LIBSRCFILES += colltrace/ProxyTrace.cc
+LIBSRCFILES += colltrace/ProxyTrace.cc colltrace/ProxyMock.cc
 LIBSRCFILES += window.cc
 LIBSRCFILES += commHash.cc
 

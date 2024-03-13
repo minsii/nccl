@@ -10,6 +10,7 @@
 #include <sstream>
 #include "Ctran.h"
 #include "ExtUtils.h"
+#include "ProxyMock.h"
 #include "ProxyTrace.h"
 #include "checks.h"
 #include "nccl_cvars.h"
@@ -105,6 +106,177 @@ class ProxyTraceTest : public ::testing::Test {
     EXPECT_EQ(dump.pastOps.size(), 0);
     EXPECT_EQ(dump.pastColls.size(), nCompletedColls);
   }
+
+  struct SendFailureConfig {
+    int opCount;
+    int rank;
+    int remoteRank;
+    int step;
+    int numMatch;
+    int delaySec;
+  };
+
+  struct MinOpCountStep {
+    uint64_t opCount{UINT64_MAX};
+    int step{INT_MAX};
+    uint64_t ts{UINT64_MAX};
+
+    void update(uint64_t opCount, int step, uint64_t ts) {
+      if (opCount < this->opCount ||
+          (opCount == this->opCount && step < this->step) ||
+          (opCount == this->opCount && step == this->step && ts < this->ts)) {
+        this->opCount = opCount;
+        this->step = step;
+        this->ts = ts;
+      }
+    }
+
+    void update(ProxyTraceOp& entry) {
+      auto& stepRecord = entry.opType == ProxyTraceOp::OpType::SEND
+          ? entry.stepRecords[ProxyOpStepStatus::TRANSMITTED]
+          : entry.stepRecords[ProxyOpStepStatus::RECEIVED];
+      update(
+          entry.collInfo.opCount,
+          stepRecord.step,
+          stepRecord.ts.time_since_epoch().count());
+    }
+
+    bool match(ProxyTraceOp& entry) {
+      auto& stepRecord = entry.opType == ProxyTraceOp::OpType::SEND
+          ? entry.stepRecords[ProxyOpStepStatus::TRANSMITTED]
+          : entry.stepRecords[ProxyOpStepStatus::RECEIVED];
+
+      return entry.collInfo.opCount == opCount && stepRecord.step == step &&
+          stepRecord.ts.time_since_epoch().count() == ts;
+    }
+
+    std::string toString() {
+      return "OpCount:" + std::to_string(opCount) +
+          ", Step:" + std::to_string(step) + ", Ts:" + std::to_string(ts);
+    }
+  };
+
+  void setMockConfig(SendFailureConfig& config) {
+    NCCL_PROXYMOCK_NET_SEND_FAILURE.clear();
+
+    NCCL_PROXYMOCK_NET_SEND_FAILURE.push_back(std::to_string(config.opCount));
+    NCCL_PROXYMOCK_NET_SEND_FAILURE.push_back(std::to_string(config.rank));
+    NCCL_PROXYMOCK_NET_SEND_FAILURE.push_back(
+        std::to_string(config.remoteRank));
+    NCCL_PROXYMOCK_NET_SEND_FAILURE.push_back(std::to_string(config.step));
+    NCCL_PROXYMOCK_NET_SEND_FAILURE.push_back(std::to_string(config.numMatch));
+    NCCL_PROXYMOCK_NET_SEND_FAILURE.push_back(std::to_string(config.delaySec));
+
+    // Manually re-initialze state of the mock instance
+    auto& instance = ProxyMockNetSendFailure::getInstance();
+    instance.initialize();
+  }
+
+  void findMinStep(
+      ProxyTrace::Dump& dump,
+      ProxyTraceOp::OpType opType,
+      MinOpCountStep& minStep) {
+    for (auto& entry : dump.activeOps) {
+      if (entry.opType == opType) {
+        minStep.update(entry);
+      }
+    }
+  }
+
+  bool findMatchingActiveOp(
+      ProxyTrace::Dump& dump,
+      MinOpCountStep& minStep,
+      ProxyTraceOp& foundOp) {
+    for (auto& entry : dump.activeOps) {
+      if (minStep.match(entry)) {
+        foundOp = entry;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void checkHangMatch(
+      ProxyTrace::Dump& dump,
+      SendFailureConfig& failureConfig) {
+    // no hang found
+    if (dump.activeOps.size() == 0) {
+      return;
+    }
+
+    // Find global min hanging opCount:step:ts as root cause report
+    // - First find local min hanging opCount:step
+    MinOpCountStep minSend, minRecv;
+    findMinStep(dump, ProxyTraceOp::OpType::SEND, minSend);
+    findMinStep(dump, ProxyTraceOp::OpType::RECV, minRecv);
+
+    // Note that comm->rank may perform proxy ops for other ranks due to NCCL
+    // topology detection, so we cannot assume rank 0 will see hanging at proxy
+    // send from rank 0. Thus, we have to use MPI to collect min steps/rank from
+    // all ranks and find the global min
+    std::vector<MinOpCountStep> allMinSends(this->numRanks);
+    std::vector<MinOpCountStep> allMinRecvs(this->numRanks);
+    MPI_Allgather(
+        &minSend,
+        sizeof(MinOpCountStep),
+        MPI_BYTE,
+        allMinSends.data(),
+        sizeof(MinOpCountStep),
+        MPI_BYTE,
+        MPI_COMM_WORLD);
+    MPI_Allgather(
+        &minRecv,
+        sizeof(MinOpCountStep),
+        MPI_BYTE,
+        allMinRecvs.data(),
+        sizeof(MinOpCountStep),
+        MPI_BYTE,
+        MPI_COMM_WORLD);
+    for (auto& send : allMinSends) {
+      minSend.update(send.opCount, send.step, send.ts);
+    }
+    for (auto& recv : allMinRecvs) {
+      minRecv.update(recv.opCount, recv.step, recv.ts);
+    }
+
+    // Expect global min hanging point matches mock config
+    // - Same opCount
+    EXPECT_EQ(minSend.opCount, failureConfig.opCount);
+    EXPECT_EQ(minRecv.opCount, failureConfig.opCount);
+    // - Both send and recv hanging at the same step
+    EXPECT_EQ(minSend.step, failureConfig.step);
+    EXPECT_EQ(minSend.step, minRecv.step);
+
+    // Check if my local send/recv hanging is the root cause
+    ProxyTraceOp foundOp;
+    bool foundMinSend = findMatchingActiveOp(dump, minSend, foundOp);
+    if (foundMinSend) {
+      if (VERBOSE) {
+        printf(
+            "Rank %d found root cause bewteen ranks %d:%d event %s\n",
+            this->globalRank,
+            foundOp.rank,
+            foundOp.remoteRank,
+            foundOp.serialize().c_str());
+      }
+      // hanging send rank matches specified rank
+      EXPECT_EQ(foundOp.rank, failureConfig.rank);
+    }
+
+    bool foundMinRecv = findMatchingActiveOp(dump, minRecv, foundOp);
+    if (foundMinRecv) {
+      if (VERBOSE) {
+        printf(
+            "Rank %d found root cause bewteen ranks %d:%d event %s\n",
+            this->globalRank,
+            foundOp.rank,
+            foundOp.remoteRank,
+            foundOp.serialize().c_str());
+      }
+      // hanging recv remoteRank matches specified rank
+      EXPECT_EQ(foundOp.remoteRank, failureConfig.rank);
+    }
+  };
 
  protected:
   int localRank{0};
@@ -278,6 +450,137 @@ TEST_F(ProxyTraceTest, QueryFinishedSendRecv) {
   }
 
   NCCLCHECK_TEST(ncclCommDestroy(comm));
+  NCCL_PROXYTRACE.clear();
+}
+
+TEST_F(ProxyTraceTest, QueryHangAllReduce) {
+  // overwrite ProxyTrace features before creating comm
+  NCCL_PROXYTRACE.push_back("trace");
+
+  SendFailureConfig failureConfig = {
+      8 /*opCount*/,
+      0 /*rank*/,
+      -1 /*remoteRank*/,
+      1 /*step*/,
+      1 /*num of matches*/,
+      30 /*delay*/
+  };
+  setMockConfig(failureConfig);
+
+  ncclComm_t comm =
+      createNcclComm(this->globalRank, this->numRanks, this->localRank);
+
+  if (skipSingleNodeRun(comm)) {
+    GTEST_SKIP();
+  }
+
+  EXPECT_NE(comm->proxyState->trace, nullptr);
+
+  const int count = 1048500;
+  const int nColl = 10;
+
+  auto begin = std::chrono::high_resolution_clock::now();
+  runAllReduce(count, nColl, comm);
+
+  // sleep 10 seconds to reach the hanging point
+  sleep(10);
+
+  auto dump = comm->proxyState->trace->dump(comm->commHash);
+
+  // Expect hanging happens and active ops are not empty
+  EXPECT_GT(dump.activeOps.size(), 0);
+
+  for (auto& entry : dump.activeOps) {
+    // Check basic info of each active op
+    EXPECT_EQ(entry.collInfo.coll, ncclFuncAllReduce);
+    EXPECT_EQ(entry.collInfo.commHash, comm->commHash);
+    EXPECT_GE(entry.channelId, 0);
+    EXPECT_GT(
+        entry.startTs.time_since_epoch().count(),
+        begin.time_since_epoch().count());
+    EXPECT_FALSE(entry.done);
+  }
+
+  // Find hanging root cause across all ranks
+  // and check if matchs failure config
+  checkHangMatch(dump, failureConfig);
+
+  // Now let's wait for all communication to finish
+  CUDACHECK_TEST(cudaStreamSynchronize(stream));
+  NCCLCHECK_TEST(ncclCommDestroy(comm));
+
+  NCCL_PROXYTRACE.clear();
+}
+
+TEST_F(ProxyTraceTest, QueryHangSendRecv) {
+  // overwrite ProxyTrace features before creating comm
+  NCCL_PROXYTRACE.push_back("trace");
+  // disable PXN so that each proxy thread is guaranteed to send and recv with
+  // PPN remote ranks
+  NCCL_PXN_DISABLE = 1;
+  // ensure we use default proxy path
+  NCCL_SENDRECV_ALGO = NCCL_SENDRECV_ALGO::orig;
+
+  ncclComm_t comm =
+      createNcclComm(this->globalRank, this->numRanks, this->localRank);
+
+  SendFailureConfig failureConfig = {
+      8 /*opCount*/,
+      0 /*rank*/,
+      comm->localRanks /*remoteRank*/,
+      1 /*step*/,
+      1 /*num of matches*/,
+      30 /*delay*/
+  };
+  // assumed no network communication now, so safe to reset mock instance
+  setMockConfig(failureConfig);
+
+  if (skipSingleNodeRun(comm)) {
+    GTEST_SKIP();
+  }
+
+  EXPECT_NE(comm->proxyState->trace, nullptr);
+
+  const int count = 1048500;
+  const int nColl = 10;
+
+  auto begin = std::chrono::high_resolution_clock::now();
+  runSendRecv(count, nColl, comm);
+
+  // sleep 10 seconds to reach the hanging point
+  sleep(10);
+
+  auto dump = comm->proxyState->trace->dump(comm->commHash);
+
+  // Expect active ops are not empty only on the hanging pairs
+  // Also find the min hanging step on each rank
+  MinOpCountStep minStep;
+  if (comm->rank == failureConfig.rank) {
+    EXPECT_GT(dump.activeOps.size(), 0);
+    findMinStep(dump, ProxyTraceOp::OpType::SEND, minStep);
+    EXPECT_EQ(minStep.opCount, failureConfig.opCount);
+    EXPECT_EQ(minStep.step, failureConfig.step);
+
+    ProxyTraceOp foundOp;
+    EXPECT_TRUE(findMatchingActiveOp(dump, minStep, foundOp));
+    EXPECT_EQ(foundOp.rank, failureConfig.rank);
+  } else if (comm->rank == failureConfig.remoteRank) {
+    EXPECT_GT(dump.activeOps.size(), 0);
+    findMinStep(dump, ProxyTraceOp::OpType::RECV, minStep);
+    EXPECT_EQ(minStep.opCount, failureConfig.opCount);
+    EXPECT_EQ(minStep.step, failureConfig.step);
+
+    ProxyTraceOp foundOp;
+    EXPECT_TRUE(findMatchingActiveOp(dump, minStep, foundOp));
+    EXPECT_EQ(foundOp.rank, failureConfig.remoteRank);
+  } else {
+    checkCompletedDump(dump, nColl);
+  }
+
+  // Now let's wait for all communication to finish
+  CUDACHECK_TEST(cudaStreamSynchronize(stream));
+  NCCLCHECK_TEST(ncclCommDestroy(comm));
+
   NCCL_PROXYTRACE.clear();
 }
 
