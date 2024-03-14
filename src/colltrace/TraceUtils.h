@@ -110,4 +110,38 @@ static inline std::string serializeList(std::list<T>& list) {
   return final_string;
 }
 
+/**
+ * Flatten a map object to plain string
+ * Input arguments:
+ *   keys: a vector of keys in the order of insertion
+ *   map: the map object to be serialized
+ *   kvdelim: delimiter between key and value
+ *   kdelim: delimiter between key-value pairs
+ */
+template <typename T>
+static inline std::string mapToString(
+    std::vector<std::string>& keys,
+    std::unordered_map<std::string, T>& map,
+    const std::string& kvdelim = " ",
+    const std::string& kdelim = " ") {
+  std::string final_string = "";
+  // unordered_map doesn't maintain insertion order. Use keys to ensure
+  // serialize in the same order as program defined
+  for (auto& key : keys) {
+    // skip if key doesn't exist in map
+    if (map.find(key) == map.end()) {
+      continue;
+    }
+    T& val = map[key];
+    final_string += key; // always quote key
+    final_string += kvdelim;
+    final_string += toString(val);
+    final_string += kdelim;
+  }
+  if (final_string.size() > 1) {
+    final_string = final_string.substr(
+        0, final_string.size() - std::string(kdelim).size());
+  }
+  return final_string;
+}
 #endif

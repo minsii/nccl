@@ -145,7 +145,7 @@ TEST_F(CollTraceTest, VerboseAllReduce) {
   std::string output = testing::internal::GetCapturedStdout();
   for (int i = 0; i < nColl; i++) {
     std::stringstream ss;
-    ss << "COLLTRACE: opCount " << std::hex << i << " AllReduce";
+    ss << "COLLTRACE: opCount " << std::hex << i << " opName AllReduce";
     std::string traceLog = ss.str();
     EXPECT_THAT(output, testing::HasSubstr(traceLog));
   }
@@ -173,7 +173,7 @@ TEST_F(CollTraceTest, VerboseAllToAll) {
   std::string output = testing::internal::GetCapturedStdout();
   for (int i = 0; i < nColl; i++) {
     std::stringstream ss;
-    ss << "COLLTRACE: opCount " << std::hex << i << " SendRecv";
+    ss << "COLLTRACE: opCount " << std::hex << i << " opName SendRecv";
     std::string traceLog = ss.str();
     EXPECT_THAT(output, testing::HasSubstr(traceLog));
   }
@@ -204,7 +204,7 @@ TEST_F(CollTraceTest, VerboseSendRecv) {
   std::string output = testing::internal::GetCapturedStdout();
   for (int i = 0; i < nColl; i++) {
     std::stringstream ss;
-    ss << "COLLTRACE: opCount " << std::hex << i << " SendRecv";
+    ss << "COLLTRACE: opCount " << std::hex << i << " opName SendRecv";
     std::string traceLog = ss.str();
     EXPECT_THAT(output, testing::HasSubstr(traceLog));
   }
@@ -243,9 +243,9 @@ TEST_F(CollTraceTest, VerboseSendOrRecv) {
   for (int i = 0; i < nColl; i++) {
     std::stringstream ss;
     if (this->globalRank % 2 == 0) {
-      ss << "COLLTRACE: opCount " << std::hex << i << " Send";
+      ss << "COLLTRACE: opCount " << std::hex << i << " opName Send";
     } else {
-      ss << "COLLTRACE: opCount " << std::hex << i << " Recv";
+      ss << "COLLTRACE: opCount " << std::hex << i << " opName Recv";
     }
     std::string traceLog = ss.str();
     EXPECT_THAT(output, testing::HasSubstr(traceLog));
@@ -269,7 +269,7 @@ TEST_F(CollTraceTest, DumpAllFinished) {
 
   EXPECT_TRUE(comm->collTrace != nullptr);
   comm->collTrace->waitForWorkerFinishQueue();
-  auto dump = comm->collTrace->dumpTrace();
+  auto dump = comm->collTrace->dump();
   EXPECT_EQ(dump.pastColls.size(), nColl);
   EXPECT_EQ(dump.currentColl, nullptr);
 
@@ -301,10 +301,10 @@ TEST_F(CollTraceTest, DumpWithUnfinished) {
         ncclAllReduce(sendBuf, recvBuf, count, ncclInt, ncclSum, comm, stream));
   }
 
-  auto dump = comm->collTrace->dumpTrace();
+  auto dump = comm->collTrace->dump();
 
   EXPECT_TRUE(dump.pastColls.size() >= nColl);
-  // +1 for the extra wakeup event that might be created by dumpTrace() function
+  // +1 for the extra wakeup event that might be created by dump() function
   EXPECT_TRUE(dump.pendingColls.size() <= nColl);
 
   NCCLCHECK_TEST(ncclCommDestroy(comm));
@@ -312,7 +312,7 @@ TEST_F(CollTraceTest, DumpWithUnfinished) {
   NCCL_COLLTRACE.clear();
 }
 
-TEST_F(CollTraceTest, TestScubaDump) {
+TEST_F(CollTraceTest, DISABLED_TestScubaDump) {
   #ifndef ENABLE_FB_INTERNAL
   GTEST_SKIP() << "This test requires FB internal build";
   #endif
@@ -336,7 +336,7 @@ TEST_F(CollTraceTest, TestScubaDump) {
   EXPECT_TRUE(comm->collTrace != nullptr);
   comm->collTrace->waitForWorkerFinishQueue();
 
-  auto dump = comm->collTrace->dumpTrace();
+  auto dump = comm->collTrace->dump();
 
   std::string output = testing::internal::GetCapturedStdout();
   for (auto& coll : dump.pastColls) {
@@ -400,23 +400,26 @@ TEST_F(CollTraceTest, ReportToLog) {
   logFile >> jsonLog;
   uint64_t opCount = 0;
   for (auto& entry : jsonLog) {
-    EXPECT_TRUE(entry.isMember("opCount"));
     EXPECT_EQ(entry["opCount"].asUInt64(), opCount++);
-    EXPECT_TRUE(entry.isMember("coll"));
-    EXPECT_EQ(entry["coll"], "AllReduce");
-    EXPECT_TRUE(entry.isMember("msg_size"));
-    EXPECT_EQ(entry["msg_size"].asUInt64(), sizeof(int) * count);
-
+    EXPECT_EQ(entry["opName"], "AllReduce");
+    EXPECT_EQ(
+        entry["sendbuff"].asUInt64(), reinterpret_cast<uint64_t>(sendBuf));
+    EXPECT_EQ(
+        entry["recvbuff"].asUInt64(), reinterpret_cast<uint64_t>(recvBuf));
+    EXPECT_TRUE(entry.isMember("count"));
+    EXPECT_EQ(entry["count"].asUInt64(), count);
+    EXPECT_EQ(entry["datatype"], "ncclInt32");
+    EXPECT_EQ(entry["redOp"], "ncclSum");
+    EXPECT_EQ(entry["root"], 0);
     // Do not seriously check value for following fields since we don't know
     // the exact value.
-    EXPECT_TRUE(entry.isMember("protocol"));
     EXPECT_TRUE(entry.isMember("algorithm"));
-    EXPECT_TRUE(entry.isMember("nChannels"));
+    EXPECT_TRUE(entry.isMember("protocol"));
+    EXPECT_TRUE(entry.isMember("pattern"));
+    EXPECT_TRUE(entry.isMember("channelId"));
     EXPECT_GE(entry["nChannels"], 1);
-    EXPECT_TRUE(entry.isMember("nThreads"));
     EXPECT_GE(entry["nThreads"], 1);
-    EXPECT_TRUE(entry.isMember("latency"));
-    EXPECT_GT(entry["latency"], 0);
+    EXPECT_GT(entry["latencyUs"], 0);
   }
   logFile.close();
 

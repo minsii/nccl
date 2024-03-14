@@ -4,8 +4,16 @@
 
 #include <cstdint>
 #include <sstream>
-#include <vector>
 #include <unordered_set>
+#include <vector>
+
+static inline std::string uint64ToHexStr(
+    const uint64_t val,
+    const std::string& prefix = "") {
+  std::stringstream ss;
+  ss << prefix << std::hex << val;
+  return ss.str();
+}
 
 static inline std::string hashToHexStr(const uint64_t hash) {
   std::stringstream ss;

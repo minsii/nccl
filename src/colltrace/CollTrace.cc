@@ -44,6 +44,21 @@
 === END_NCCL_CVAR_INFO_BLOCK ===
 */
 
+static std::unordered_map<ncclPattern_t, std::string> ncclPatternStr = {
+    {ncclPatternRing, "Ring"},
+    {ncclPatternRingTwice, "RingTwice"},
+    {ncclPatternPipelineFrom, "PipelineFrom"},
+    {ncclPatternPipelineTo, "PipelineTo"},
+    {ncclPatternTreeUp, "TreeUp"},
+    {ncclPatternTreeDown, "TreeDown"},
+    {ncclPatternTreeUpDown, "TreeUpDown"},
+    {ncclPatternCollnetChain, "CollnetChain"},
+    {ncclPatternCollnetDirect, "CollnetDirect"},
+    {ncclPatternNvls, "Nvls"},
+    {ncclPatternNvlsTree, "NvlsTree"},
+    {ncclPatternSend, "Send"},
+    {ncclPatternRecv, "Recv"}};
+
 CollTrace::CollTrace(ncclComm* comm) : comm_(comm) {
   std::vector<std::string> enabledFeatures;
   if (!NCCL_COLLTRACE.empty()) {
@@ -89,8 +104,8 @@ CollTrace::~CollTrace() {
         comm_->commHash,
         comm_->rank);
 
-    eventQueue_.push(
-      std::unique_ptr<EventInfo>(new EventInfo(EventInfo::EventType::TERMINATE)));
+    eventQueue_.push(std::unique_ptr<CollTraceEvent>(
+        new CollTraceEvent(CollTraceEvent::EventType::TERMINATE)));
     if (profilingWorkerThread_.joinable()) {
       profilingWorkerThread_.join();
     }
@@ -124,27 +139,13 @@ bool CollTrace::dumpResultsToFile() {
     // running
     std::lock_guard<std::mutex> lock(workerMutex_);
 
-    std::stringstream stream;
-    stream << "[\n  {\n";
-    for (auto it = results_.begin(); it != results_.end(); ++it) {
-      if (it != results_.begin()) {
-        stream << "  },\n  {\n";
-      }
-      std::string algoStr =
-          it->info.algorithm >= 0 ? ncclAlgoStr[it->info.algorithm] : "N/A";
-      std::string protoStr =
-          it->info.protocol >= 0 ? ncclProtoStr[it->info.protocol] : "N/A";
-      stream << "    \"coll\": \"" << it->info.opName << "\",\n"
-             << "    \"opCount\": " << it->opCount << ",\n"
-             << "    \"msg_size\": "
-             << (it->info.count * ncclTypeSize(it->info.datatype)) << ",\n"
-             << "    \"algorithm\": \"" << algoStr << "\",\n"
-             << "    \"protocol\": \"" << protoStr << "\",\n"
-             << "    \"nChannels\": " << it->info.nChannels << ",\n"
-             << "    \"nThreads\": " << it->info.nThreads << ",\n"
-             << "    \"latency\": " << it->latency << "\n";
+    std::vector<std::string> serializedResults(pastColls_.size());
+
+    for (int i = 0; i < pastColls_.size(); i++) {
+      auto& result = pastColls_[i];
+      serializedResults[i] = result->serialize(true);
     }
-    stream << "  }\n]";
+    std::string contents = serializeVec(serializedResults);
 
     const std::string fileName = NCCL_COLLTRACE_DIR + "/comm" +
         hashToHexStr(comm_->commHash) + "_rank" + std::to_string(comm_->rank) +
@@ -153,14 +154,14 @@ bool CollTrace::dumpResultsToFile() {
         NCCL_ALL,
         "COLLTRACE: rank %d writing %lu online profiler data to : %s",
         comm_->rank,
-        results_.size(),
+        pastColls_.size(),
         fileName.c_str());
 
     if (ncclIsFbPath(fileName)) {
-      ncclFbUpload(stream.str(), fileName);
+      ncclFbUpload(contents, fileName);
     } else {
       std::ofstream f(fileName);
-      f << stream.str();
+      f << contents;
       f.close();
     }
     return true;
@@ -168,16 +169,22 @@ bool CollTrace::dumpResultsToFile() {
   return false;
 }
 
-CollTrace::CollTraceDump CollTrace::dumpTrace() {
+CollTrace::Dump CollTrace::dump() {
   std::lock_guard<std::mutex> lock(workerMutex_);
-  CollTraceDump dump{};
-  if (curEventState_ == EventState::IN_PROGRESS) {
-    dump.currentColl = curEvent_;
-    dump.currentCollState = curEventState_;
+  CollTrace::Dump dump{};
+
+  if (curCollState_ == CurrentCollState::IN_PROGRESS) {
+    // copy contents
+    dump.currentColl =
+        std::unique_ptr<CollTraceColl>(new CollTraceColl(curEvent_->coll));
   }
 
   dump.pendingColls = eventQueue_.dumpQueue();
-  dump.pastColls = results_;
+
+  for (auto& result : pastColls_) {
+    // copy contents
+    dump.pastColls.emplace_back(*result);
+  }
   return dump;
 }
 
@@ -196,7 +203,7 @@ void* CollTrace::collTraceThreadFnImpl() {
       comm_->rank);
 
   while (true) {
-    curEventState_ = EventState::PENDING;
+    curCollState_ = CurrentCollState::PENDING;
     curEvent_ = nullptr;
 
     // For testing purpose only. During testing, we want to ensure the worker
@@ -221,62 +228,41 @@ void* CollTrace::collTraceThreadFnImpl() {
       curEvent_ = std::move(tmp_event);
     }
 
-    if (curEvent_->eventType == EventInfo::EventType::TERMINATE) {
+    if (curEvent_->eventType == CollTraceEvent::EventType::TERMINATE) {
       break;
-    } else if (curEvent_->eventType == EventInfo::EventType::WAKE_UP) {
+    } else if (curEvent_->eventType == CollTraceEvent::EventType::WAKE_UP) {
       continue;
     }
-    curEventState_ = EventState::IN_PROGRESS;
+    curCollState_ = CurrentCollState::IN_PROGRESS;
     cudaError_t res = cudaEventSynchronize(curEvent_->stop.get());
-    curEventState_ = EventState::DONE;
+    curCollState_ = CurrentCollState::DONE;
     float latency = -1;
 
     if (res == cudaSuccess) {
       res = cudaEventElapsedTime(&latency, curEvent_->start.get(), curEvent_->stop.get());
     }
 
-    ResultInfo result{
-      .opCount= curEvent_->opCount,
-        .info = curEvent_->info,
-        .stream = curEvent_->stream,
-        .iteration = curEvent_->iteration,
-      .latency = res == cudaSuccess? latency: -1,
-    };
+    auto result = std::unique_ptr<CollTraceColl>(new CollTraceColl());
+    *result = curEvent_->coll;
+    result->latency = (res == cudaSuccess) ? latency : -1;
+
+    if (features & CollTrace::Features::VERBOSE) {
+      INFO(NCCL_COLL, "COLLTRACE: %s", result->toString().c_str());
+    }
 
     {
       std::lock_guard<std::mutex> lock(workerMutex_);
-      results_.push_back(result);
+      pastColls_.push_back(std::move(result));
     }
 
     // Free the event objects
-    eventPool_.add(std::move(curEvent_->start));
-    eventPool_.add(std::move(curEvent_->stop));
+    cudaEventPool_.add(std::move(curEvent_->start));
+    cudaEventPool_.add(std::move(curEvent_->stop));
 
     // FIXME: cannot record protocol for sendrecvs since a grouped sendrecv
     // may contain multiple protocols
     if (features & CollTrace::Features::FB_IO_DURING_RUN) {
-      COLLTRACE_IO_FB_DURING_RUN(result, comm_->rank);
-    }
-
-    if (features & CollTrace::Features::VERBOSE) {
-      INFO(
-          NCCL_COLL,
-          "COLLTRACE: opCount %lx %s sendbuff %p recvbuff %p count %ld datatype %s op %s root %d algorithm %s protocol %s nchannels %d nthreads %d latency %.2f us",
-          result.opCount,
-          result.info.opName,
-          result.info.sendbuff,
-          result.info.recvbuff,
-          result.info.count,
-          getDatatypeStr(result.info.datatype).c_str(),
-          getRedOpStr(result.info.op).c_str(),
-          result.info.root,
-          result.info.algorithm >= 0 ? ncclAlgoStr[result.info.algorithm]
-                                     : "N/A",
-          result.info.protocol >= 0 ? ncclProtoStr[result.info.protocol]
-                                    : "N/A",
-          result.info.nChannels,
-          result.info.nThreads,
-          result.latency * 1000);
+      COLLTRACE_IO_FB_DURING_RUN((*result), comm_->rank);
     }
 
     // FIXME: we should revisit bootstrapAllGather() here since commAbort
@@ -286,27 +272,29 @@ void* CollTrace::collTraceThreadFnImpl() {
         features & CollTrace::Features::ONLINE_TUNING) {
       // Online tuning - average latencies across ranks & send to tuner
       float* latencies = NULL;
-      NCCLCHECKIGNORE(ncclCalloc(&latencies, curEvent_->info.comm->nRanks));
-      latencies[curEvent_->info.comm->rank] = latency;
+      NCCLCHECKIGNORE(
+          ncclCalloc(&latencies, curEvent_->coll.info.comm->nRanks));
+      latencies[curEvent_->coll.info.comm->rank] = latency;
       NCCLCHECKIGNORE(bootstrapAllGather(
-          curEvent_->info.comm->bootstrap, latencies, sizeof(float)));
+          curEvent_->coll.info.comm->bootstrap, latencies, sizeof(float)));
       float sum = 0.0;
-      for (int i = 0; i < curEvent_->info.comm->nRanks; i++) {
+      for (int i = 0; i < curEvent_->coll.info.comm->nRanks; i++) {
         sum += latencies[i];
       }
 
       free(latencies);
-      sum /= (float)curEvent_->info.comm->nRanks;
+      sum /= (float)curEvent_->coll.info.comm->nRanks;
 
-      curEvent_->info.comm->tuner->addOnlineResult(
-          curEvent_->info.coll,
-          curEvent_->info.count * ncclTypeSize(curEvent_->info.datatype),
-          curEvent_->iteration,
+      curEvent_->coll.info.comm->tuner->addOnlineResult(
+          curEvent_->coll.info.coll,
+          curEvent_->coll.info.count *
+              ncclTypeSize(curEvent_->coll.info.datatype),
+          curEvent_->coll.iteration,
           sum,
-          curEvent_->info.algorithm,
-          curEvent_->info.protocol,
-          curEvent_->info.nChannels,
-          curEvent_->info.nThreads);
+          curEvent_->coll.info.algorithm,
+          curEvent_->coll.info.protocol,
+          curEvent_->coll.info.nChannels,
+          curEvent_->coll.info.nThreads);
     }
   }
 
@@ -321,27 +309,91 @@ void* CollTrace::collTraceThreadFnImpl() {
   return nullptr;
 }
 
-std::unique_ptr<EventInfo> CollTrace::getEventFromPool() {
-  std::unique_ptr<EventInfo> eventInfo(new EventInfo);
-  eventInfo->start = eventPool_.takeOne();
-  eventInfo->stop = eventPool_.takeOne();
+std::unique_ptr<CollTraceEvent> CollTrace::createEvent() {
+  std::unique_ptr<CollTraceEvent> eventInfo(new CollTraceEvent);
+  eventInfo->start = cudaEventPool_.takeOne();
+  eventInfo->stop = cudaEventPool_.takeOne();
   if (!eventInfo->start || !eventInfo->stop) {
-    std::unique_ptr<EventInfo> nullEventInfo(nullptr);
-    return nullEventInfo;
+    std::unique_ptr<CollTraceEvent> nullCollTraceEvent(nullptr);
+    return nullCollTraceEvent;
   }
   return eventInfo;
 }
 
-void CollTrace::enqueueEvent(std::unique_ptr<EventInfo> eventInfo) {
-  eventQueue_.push(std::move(eventInfo));
+void CollTrace::enqueueEvent(std::unique_ptr<CollTraceEvent> event) {
+  eventQueue_.push(std::move(event));
 }
 
 void CollTrace::waitForWorkerFinishQueue() {
   std::unique_lock<std::mutex> waitLock(waitQueueEmptyMutex_);
   waitingForQueueEmpty_ = true;
-  eventQueue_.push(
-      std::unique_ptr<EventInfo>(new EventInfo(EventInfo::EventType::WAKE_UP)));
+  eventQueue_.push(std::unique_ptr<CollTraceEvent>(
+      new CollTraceEvent(CollTraceEvent::EventType::WAKE_UP)));
   waitQueueEmptyCv_.wait(waitLock, [this] { return !waitingForQueueEmpty_; });
+}
+
+static std::vector<std::string> collKeys = {
+    "opCount",
+    "opName",
+    "sendbuff",
+    "recvbuff",
+    "count",
+    "datatype",
+    "redOp",
+    "root",
+    "algorithm",
+    "protocol",
+    "pattern",
+    "channelId",
+    "nChannels",
+    "nThreads",
+    "latencyUs"};
+
+std::unordered_map<std::string, std::string> CollTraceColl::retrieveMap(
+    bool quoted) {
+  std::unordered_map<std::string, std::string> infoMap;
+  std::string algoStr =
+      info.algorithm >= 0 ? ncclAlgoStr[info.algorithm] : "N/A";
+  std::string protoStr =
+      info.protocol >= 0 ? ncclProtoStr[info.protocol] : "N/A";
+  std::string patternStr =
+      ncclPatternStr.count(info.pattern) ? ncclPatternStr[info.pattern] : "N/A";
+  std::string datatypeStr = getDatatypeStr(info.datatype);
+  std::string redOpStr = getRedOpStr(info.op);
+
+  infoMap["opCount"] = std::to_string(opCount);
+  infoMap["opName"] = quoted ? toQuotedString(info.opName) : info.opName;
+  infoMap["sendbuff"] =
+      std::to_string(reinterpret_cast<uint64_t>(info.sendbuff));
+  infoMap["recvbuff"] =
+      std::to_string(reinterpret_cast<uint64_t>(info.recvbuff));
+  infoMap["count"] = std::to_string(info.count);
+  infoMap["datatype"] = quoted ? toQuotedString(datatypeStr) : datatypeStr;
+  infoMap["redOp"] = quoted ? toQuotedString(redOpStr) : redOpStr;
+  infoMap["root"] = std::to_string(info.root);
+  infoMap["algorithm"] = quoted ? toQuotedString(algoStr) : algoStr;
+  infoMap["protocol"] = quoted ? toQuotedString(protoStr) : protoStr;
+  infoMap["pattern"] = quoted ? toQuotedString(patternStr) : patternStr;
+  infoMap["channelId"] = std::to_string(info.channelId);
+  infoMap["nChannels"] = std::to_string(info.nChannels);
+  infoMap["nThreads"] = std::to_string(info.nThreads);
+  infoMap["latencyUs"] = std::to_string(latency * 1000);
+  return infoMap;
+}
+
+std::string CollTraceColl::serialize(bool quoted) {
+  std::unordered_map<std::string, std::string> infoMap = retrieveMap(quoted);
+  return serializeMap(collKeys, infoMap, quoted);
+}
+
+std::string CollTraceColl::toString() {
+  std::unordered_map<std::string, std::string> infoMap = retrieveMap(false);
+  // Convert integer sendbuff and recvbuff to hexadecimal only for display
+  infoMap["sendbuff"] =
+      uint64ToHexStr(reinterpret_cast<uint64_t>(info.sendbuff), "0x");
+  infoMap["recvbuff"] =
+      uint64ToHexStr(reinterpret_cast<uint64_t>(info.sendbuff), "0x");
+  return mapToString(collKeys, infoMap);
 }
 
 ncclResult_t collTraceInit(ncclComm* comm) {
