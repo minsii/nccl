@@ -6,6 +6,10 @@
 #else
 
 // define wrapper of internal upload API and always return false
+#define ncclFbLogSample(args...) \
+  do {                        \
+  } while (0)
+
 #define ncclIsFbPath(path) (false)
 #define ncclFbUpload(args...) \
   do {                        \

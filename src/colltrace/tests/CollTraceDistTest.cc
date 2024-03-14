@@ -14,6 +14,7 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <rfe/scubadata/ScubaData.h>
 #include "Ctran.h"
 #include "checks.h"
 #include "json/json.h"
@@ -312,18 +313,36 @@ TEST_F(CollTraceTest, DumpWithUnfinished) {
   NCCL_COLLTRACE.clear();
 }
 
-TEST_F(CollTraceTest, DISABLED_TestScubaDump) {
+TEST_F(CollTraceTest, TestScubaDump) {
   #ifndef ENABLE_FB_INTERNAL
   GTEST_SKIP() << "This test requires FB internal build";
   #endif
 
-  setenv("NCCL_COLL_TRACE_SCUBA_TEST", "true", 0);
   // overwrite CollTrace features before creating comm
   NCCL_COLLTRACE.push_back("fb");
   ncclComm_t comm =
       createNcclComm(this->globalRank, this->numRanks, this->localRank);
   const int count = 1048576;
   const int nColl = 10;
+
+  auto testCallback = [](void* scubaSample) {
+    auto sample = static_cast<facebook::rfe::ScubaData::Sample*>(scubaSample);
+    std::stringstream ss;
+    ss << "COLLTRACE TEST: logging to scuba:"
+       << " commHash: " << std::hex << sample->getIntValue("commHash")
+       << " opCount: " << std::hex << sample->getIntValue("opCount")
+       << " stream: " << std::hex << sample->getIntValue("stream")
+       << " iteration: " << std::hex << sample->getIntValue("iteration")
+       << " opName: " << sample->getNormalValue("opName")
+       << " sendbuff: " << std::hex << sample->getIntValue("sendbuff")
+       << " recvbuff: " << std::hex << sample->getIntValue("recvbuff")
+       << " count: " << std::hex << sample->getIntValue("count")
+       << std::endl;
+    std::string traceLog = ss.str();
+    fwrite(traceLog.c_str(), 1, traceLog.size(), stdout);
+  };
+
+  scubaTestCallback = testCallback;
 
   testing::internal::CaptureStdout();
 
@@ -341,15 +360,15 @@ TEST_F(CollTraceTest, DISABLED_TestScubaDump) {
   std::string output = testing::internal::GetCapturedStdout();
   for (auto& coll : dump.pastColls) {
     std::stringstream ss;
-    ss << "COLLTRACE TEST: logging to scuba: "
-       << "commHash: " << std::hex << coll.info.comm->commHash
-       << "opCount: " << std::hex << coll.opCount
-       << "stream: " << std::hex << reinterpret_cast<uint64_t>(coll.stream)
-       << "iteration: " << std::hex << coll.iteration
-       << "opName: " << coll.info.opName
-       << "sendbuff: " << std::hex << reinterpret_cast<uint64_t>(coll.info.sendbuff)
-       << "recvbuff: " << std::hex << reinterpret_cast<uint64_t>(coll.info.recvbuff)
-       << "count: " << std::hex << static_cast<uint64_t>(coll.info.count)
+    ss << "COLLTRACE TEST: logging to scuba:"
+       << " commHash: " << std::hex << coll.info.comm->commHash
+       << " opCount: " << std::hex << coll.opCount
+       << " stream: " << std::hex << reinterpret_cast<uint64_t>(coll.stream)
+       << " iteration: " << std::hex << coll.iteration
+       << " opName: " << coll.info.opName
+       << " sendbuff: " << std::hex << reinterpret_cast<uint64_t>(coll.info.sendbuff)
+       << " recvbuff: " << std::hex << reinterpret_cast<uint64_t>(coll.info.recvbuff)
+       << " count: " << std::hex << static_cast<uint64_t>(coll.info.count)
        << std::endl;
     std::string traceLog = ss.str();
     EXPECT_THAT(output, testing::HasSubstr(traceLog));

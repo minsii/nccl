@@ -9,6 +9,7 @@
 
 #include "ExtUtils.h"
 #include <algorithm>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -242,15 +243,23 @@ void* CollTrace::collTraceThreadFnImpl() {
       res = cudaEventElapsedTime(&latency, curEvent_->start.get(), curEvent_->stop.get());
     }
 
-    auto result = std::unique_ptr<CollTraceColl>(new CollTraceColl());
-    *result = curEvent_->coll;
-    result->latency = (res == cudaSuccess) ? latency : -1;
-
-    if (features & CollTrace::Features::VERBOSE) {
-      INFO(NCCL_COLL, "COLLTRACE: %s", result->toString().c_str());
-    }
-
     {
+      // Bracket to ensure result not getting accessed after it is moved.
+      // Also for release lock_guard.
+      auto result = std::unique_ptr<CollTraceColl>(new CollTraceColl());
+      *result = curEvent_->coll;
+      result->latency = (res == cudaSuccess) ? latency : -1;
+
+      if (features & CollTrace::Features::VERBOSE) {
+        INFO(NCCL_COLL, "COLLTRACE: %s", result->toString().c_str());
+      }
+
+      // FIXME: cannot record protocol for sendrecvs since a grouped sendrecv
+      // may contain multiple protocols
+      if (features & CollTrace::Features::FB_IO_DURING_RUN) {
+        logCollSample(*result);
+      }
+
       std::lock_guard<std::mutex> lock(workerMutex_);
       pastColls_.push_back(std::move(result));
     }
@@ -258,12 +267,6 @@ void* CollTrace::collTraceThreadFnImpl() {
     // Free the event objects
     cudaEventPool_.add(std::move(curEvent_->start));
     cudaEventPool_.add(std::move(curEvent_->stop));
-
-    // FIXME: cannot record protocol for sendrecvs since a grouped sendrecv
-    // may contain multiple protocols
-    if (features & CollTrace::Features::FB_IO_DURING_RUN) {
-      COLLTRACE_IO_FB_DURING_RUN((*result), comm_->rank);
-    }
 
     // FIXME: we should revisit bootstrapAllGather() here since commAbort
     // may be called either on local rank or a remote rank causing socket
@@ -330,6 +333,32 @@ void CollTrace::waitForWorkerFinishQueue() {
   eventQueue_.push(std::unique_ptr<CollTraceEvent>(
       new CollTraceEvent(CollTraceEvent::EventType::WAKE_UP)));
   waitQueueEmptyCv_.wait(waitLock, [this] { return !waitingForQueueEmpty_; });
+}
+
+bool CollTrace::logCollSample(CollTraceColl& coll) {
+  std::unordered_map<std::string, std::string> normalMap;
+  std::unordered_map<std::string, int64_t> intMap;
+
+  intMap["rank"] = coll.info.comm->rank;
+  intMap["commHash"] = coll.info.comm->commHash;
+  intMap["opCount"] = coll.opCount;
+  intMap["stream"] = reinterpret_cast<int64_t>(coll.stream);
+  intMap["iteration"] = coll.iteration;
+  normalMap["opName"] = coll.info.opName;
+  intMap["sendbuff"] = reinterpret_cast<int64_t>(coll.info.sendbuff);
+  intMap["recvbuff"] = reinterpret_cast<int64_t>(coll.info.recvbuff);
+  intMap["count"] = coll.info.count;
+  normalMap["dataType"] = getDatatypeStr(coll.info.datatype);
+  normalMap["redOp"] = getRedOpStr(coll.info.op);
+  intMap["root"] = coll.info.root;
+  normalMap["algorithm"] = ncclAlgoStr[coll.info.algorithm];
+  normalMap["protocol"] = ncclProtoStr[coll.info.protocol];
+  intMap["nChannels"] = coll.info.nChannels;
+  intMap["nThreads"] = coll.info.nThreads;
+  intMap["latency (microseconds)"] = 1000 * coll.latency;
+
+  ncclFbLogSample("nccl_coll_trace", normalMap, intMap);
+  return true;
 }
 
 static std::vector<std::string> collKeys = {

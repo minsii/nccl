@@ -6,6 +6,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <deque>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -184,6 +185,8 @@ class CollTrace {
 
   struct ncclComm* comm_{nullptr};
   std::thread profilingWorkerThread_;
+
+  bool logCollSample(CollTraceColl& coll);
 
  public:
   enum Features {
