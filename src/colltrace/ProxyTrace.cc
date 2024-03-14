@@ -307,11 +307,13 @@ static std::vector<std::string> infoKeys = {
 
 std::string ProxyTraceColl::serialize(bool quoted) {
   std::unordered_map<std::string, std::string> map;
-  map["commHash"] = hashToHexStr(collInfo.commHash);
+  map["commHash"] = quoted ? toQuotedString(hashToHexStr(collInfo.commHash))
+                           : hashToHexStr(collInfo.commHash);
   map["opCount"] = std::to_string(collInfo.opCount);
   map["coll"] = quoted ? toQuotedString(proxyCollStr[collInfo.coll])
                        : proxyCollStr[collInfo.coll];
-  map["channelIds"] = unorderedSetToStr(channelIds);
+  map["channelIds"] = quoted ? toQuotedString(unorderedSetToStr(channelIds))
+                             : unorderedSetToStr(channelIds);
   map["totalSendSize"] = std::to_string(totalSendSize);
   map["totalRecvSize"] = std::to_string(totalRecvSize);
   map["nProxyOps"] = std::to_string(nProxyOps);
@@ -341,7 +343,8 @@ static std::vector<std::string> entryKeys = {
 
 std::string ProxyTraceOp::serialize(bool quoted) {
   std::unordered_map<std::string, std::string> map;
-  map["commHash"] = hashToHexStr(collInfo.commHash);
+  map["commHash"] = quoted ? toQuotedString(hashToHexStr(collInfo.commHash))
+                           : hashToHexStr(collInfo.commHash);
   map["opCount"] = std::to_string(collInfo.opCount);
   map["coll"] = quoted ? toQuotedString(proxyCollStr[collInfo.coll])
                        : proxyCollStr[collInfo.coll];

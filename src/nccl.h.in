@@ -38,6 +38,7 @@ extern "C" {
 #define NCCL_ALLTOALLV_SUPPORTED
 #define NCCL_ALLTOALL_SUPPORTED
 #define NCCL_COMM_GET_UNIQUE_HASH
+#define NCCL_COMM_DUMP
 
 #ifndef __CUDA_FP8_TYPES_EXIST__
 #undef NCCL_ENABLE_FP8
@@ -593,5 +594,11 @@ ncclResult_t  pncclCommGetUniqueHash(ncclComm_t comm, uint64_t* uniqueHash);
 #ifdef __cplusplus
 } // end extern "C"
 #endif
+
+#include <unordered_map>
+#include <string>
+/* Dump NCCL current internal state for a given communicator in a key-value store format.
+ * define outside extern "C"{} to pass C++ template */
+ncclResult_t  ncclCommDump(ncclComm_t comm, std::unordered_map<std::string, std::string>& map);
 
 #endif // end include guard

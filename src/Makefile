@@ -46,6 +46,7 @@ LIBSRCFILES += colltrace/CollTrace.cc
 LIBSRCFILES += colltrace/ProxyTrace.cc colltrace/ProxyMock.cc
 LIBSRCFILES += window.cc
 LIBSRCFILES += commHash.cc
+LIBSRCFILES += commDump.cc
 
 INCLUDES := -Iinclude
 INCLUDES += -Ialgorithms -Ialgorithms/allreduce
