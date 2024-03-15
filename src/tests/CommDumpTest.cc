@@ -100,6 +100,15 @@ TEST_F(CommDumpTest, SingleComm) {
     EXPECT_EQ(dump["localRanks"], std::to_string(this->comm->localRanks));
     EXPECT_EQ(dump.count("nNodes"), 1);
     EXPECT_EQ(dump["nNodes"], std::to_string(this->comm->nNodes));
+    EXPECT_EQ(dump.count("rings"), 1);
+    if (dump.count("rings")) {
+      Json::Value ringsObjs;
+      std::stringstream(dump["rings"]) >> ringsObjs;
+      EXPECT_EQ(ringsObjs.size(), this->comm->nChannels);
+      for (int i = 0; i < this->comm->nChannels; i++) {
+        EXPECT_EQ(ringsObjs[i].size(), this->comm->nRanks);
+      }
+    }
   }
 
   EXPECT_EQ(dump.count("CT_pastColls"), 1);

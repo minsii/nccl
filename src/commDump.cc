@@ -10,6 +10,25 @@
 #include "comm.h"
 #include "nccl.h"
 
+static std::string dumpRing(int* userRanks, int nRank) {
+  std::vector<std::string> ringVec;
+  ringVec.reserve(nRank);
+  for (int i = 0; i < nRank; i++) {
+    ringVec.emplace_back(std::to_string(userRanks[i]));
+  }
+  return serializeVec(ringVec);
+}
+
+static std::string dumpRings(ncclComm_t comm) {
+  std::vector<std::string> ringsVec;
+  ringsVec.reserve(comm->nChannels);
+  for (int i = 0; i < comm->nChannels; i++) {
+    ringsVec.emplace_back(
+        dumpRing(comm->channels[i].ring.userRanks, comm->nRanks));
+  }
+  return serializeVec(ringsVec);
+}
+
 static void dumpCommInfo(
     ncclComm_t comm,
     std::unordered_map<std::string, std::string>& map) {
@@ -24,17 +43,9 @@ static void dumpCommInfo(
     map["localRanks"] = std::to_string(comm->localRanks);
     map["nNodes"] = std::to_string(comm->nNodes);
 
-    // TODO: dump topology
+    // TODO: dump tree topology
+    map["rings"] = dumpRings(comm);
   }
-}
-
-static std::string dumpRing(int* userRanks, int nRank) {
-  std::vector<std::string> ringVec;
-  ringVec.reserve(nRank);
-  for (int i = 0; i < nRank; i++) {
-    ringVec.emplace_back(std::to_string(userRanks[i]));
-  }
-  return serializeVec(ringVec);
 }
 
 static void dumpCollTrace(
