@@ -80,7 +80,7 @@ TEST_F(CommDumpTest, SingleComm) {
 
   // commHash is intentially stored as hex string for readability
   std::stringstream commHashSs;
-  commHashSs << std::hex << comm->commHash;
+  commHashSs << "\"" << std::hex << comm->commHash << "\"";
   std::string commHashStr = commHashSs.str();
 
   EXPECT_EQ(dump.count("commHash"), 1);

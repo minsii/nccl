@@ -35,7 +35,7 @@ struct CollTraceColl {
   ncclInfo info;
   int64_t iteration;
   cudaStream_t stream;
-  float latency;
+  float latency {-1};
 
   // serialize the entry to a json format string
   std::string serialize(bool quoted = false);

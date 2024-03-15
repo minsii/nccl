@@ -406,7 +406,7 @@ std::unordered_map<std::string, std::string> CollTraceColl::retrieveMap(
   infoMap["channelId"] = std::to_string(info.channelId);
   infoMap["nChannels"] = std::to_string(info.nChannels);
   infoMap["nThreads"] = std::to_string(info.nThreads);
-  infoMap["latencyUs"] = std::to_string(latency * 1000);
+  infoMap["latencyUs"] = std::to_string(latency < 0 ? -1: latency * 1000);
   return infoMap;
 }
 

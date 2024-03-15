@@ -32,7 +32,7 @@ static std::string dumpRings(ncclComm_t comm) {
 static void dumpCommInfo(
     ncclComm_t comm,
     std::unordered_map<std::string, std::string>& map) {
-  map["commHash"] = hashToHexStr(comm->commHash);
+  map["commHash"] = toQuotedString(hashToHexStr(comm->commHash));
   map["rank"] = std::to_string(comm->rank);
   map["localRank"] = std::to_string(comm->localRank);
   map["node"] = std::to_string(comm->node);
