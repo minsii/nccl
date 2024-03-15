@@ -3,10 +3,12 @@
 #define TRACE_UTILES_H
 
 #include <chrono>
+#include <deque>
 #include <iomanip>
 #include <list>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 // TODO: should this be util function?
@@ -71,6 +73,26 @@ static inline std::string serializeMap(
 }
 
 /**
+ * Serialize a unordered set object to json string
+ * Input arguments:
+ *   set: the unordered set object to be serialized
+ */
+template <typename T>
+static inline std::string serializeSet(std::unordered_set<T>& set) {
+  std::string final_string = "[";
+  for (auto& it : set) {
+    final_string += toString(it);
+    final_string += ", ";
+  }
+  if (final_string.size() > 1) {
+    final_string =
+        final_string.substr(0, final_string.size() - std::string(", ").size());
+  }
+  final_string += "]";
+  return final_string;
+}
+
+/**
  * Serialize a vector object to json string
  * Input arguments:
  *   vec: the vector object to be serialized
@@ -100,6 +122,24 @@ static inline std::string serializeList(std::list<T>& list) {
   std::string final_string = "[";
   for (auto& it : list) {
     final_string += toString(it);
+    final_string += ", ";
+  }
+  if (final_string.size() > 1) {
+    final_string =
+        final_string.substr(0, final_string.size() - std::string(", ").size());
+  }
+  final_string += "]";
+  return final_string;
+}
+/**
+ * Serialize a deque of objects to json string. Require the object type has
+ * serialize function. Input arguments: deque: the deque object to be serialized
+ */
+template <typename T>
+static inline std::string serializeObjects(std::deque<T>& objs) {
+  std::string final_string = "[";
+  for (auto& obj : objs) {
+    final_string += obj.serialize(true /*quote*/);
     final_string += ", ";
   }
   if (final_string.size() > 1) {

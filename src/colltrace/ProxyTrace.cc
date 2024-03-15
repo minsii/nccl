@@ -307,11 +307,12 @@ static std::vector<std::string> infoKeys = {
 
 std::string ProxyTraceColl::serialize(bool quoted) {
   std::unordered_map<std::string, std::string> map;
-  map["commHash"] = hashToHexStr(collInfo.commHash);
+  map["commHash"] = quoted ? toQuotedString(hashToHexStr(collInfo.commHash))
+                           : hashToHexStr(collInfo.commHash);
   map["opCount"] = std::to_string(collInfo.opCount);
   map["coll"] = quoted ? toQuotedString(proxyCollStr[collInfo.coll])
                        : proxyCollStr[collInfo.coll];
-  map["channelIds"] = unorderedSetToStr(channelIds);
+  map["channelIds"] = serializeSet(channelIds);
   map["totalSendSize"] = std::to_string(totalSendSize);
   map["totalRecvSize"] = std::to_string(totalRecvSize);
   map["nProxyOps"] = std::to_string(nProxyOps);
@@ -341,7 +342,8 @@ static std::vector<std::string> entryKeys = {
 
 std::string ProxyTraceOp::serialize(bool quoted) {
   std::unordered_map<std::string, std::string> map;
-  map["commHash"] = hashToHexStr(collInfo.commHash);
+  map["commHash"] = quoted ? toQuotedString(hashToHexStr(collInfo.commHash))
+                           : hashToHexStr(collInfo.commHash);
   map["opCount"] = std::to_string(collInfo.opCount);
   map["coll"] = quoted ? toQuotedString(proxyCollStr[collInfo.coll])
                        : proxyCollStr[collInfo.coll];
@@ -422,6 +424,21 @@ static inline void dumpActiveOps(
   }
 }
 
+static inline void dumpActiveColls(
+    uint64_t commHash,
+    ProxyActiveCollMap& activeCollsMap,
+    std::deque<ProxyTraceColl>& deq) {
+  if (activeCollsMap.find(commHash) == activeCollsMap.end()) {
+    return;
+  }
+
+  for (auto& it : activeCollsMap[commHash]) {
+    auto& coll = it.second;
+    // copy record
+    deq.push_back(*coll);
+  }
+}
+
 static inline void dumpPastOps(
     uint64_t commHash,
     ProxyPastOpMap& pastOpMap,
@@ -461,6 +478,7 @@ ProxyTrace::Dump ProxyTrace::dump(uint64_t commHash) {
   ProxyTrace::Dump dump;
 
   dumpActiveOps(commHash, activeOps_, dump.activeOps);
+  dumpActiveColls(commHash, activeColls_, dump.activeColls);
   dumpPastOps(commHash, pastOps_, dump.pastOps);
   dumpPastColls(commHash, pastColls_, dump.pastColls);
 

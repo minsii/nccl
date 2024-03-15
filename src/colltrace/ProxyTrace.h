@@ -152,6 +152,8 @@ class ProxyTrace {
     std::deque<ProxyTraceOp> pastOps;
     // pastColls in completion time order
     std::deque<ProxyTraceColl> pastColls;
+    // activeColls in start time order
+    std::deque<ProxyTraceColl> activeColls;
   };
 
   // Dump all trace for a given communicator
