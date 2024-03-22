@@ -181,7 +181,8 @@ CollTrace::Dump CollTrace::dump() {
   std::lock_guard<std::mutex> lock(workerMutex_);
   CollTrace::Dump dump{};
 
-  if (curCollState_ == CurrentCollState::IN_PROGRESS) {
+  if (curCollState_ == CurrentCollState::IN_PROGRESS ||
+      curCollState_ == CurrentCollState::WAIT_START) {
     // copy contents
     dump.currentColl =
         std::unique_ptr<CollTraceColl>(new CollTraceColl(curEvent_->coll));
@@ -241,8 +242,14 @@ void* CollTrace::collTraceThreadFnImpl() {
     } else if (curEvent_->eventType == CollTraceEvent::EventType::WAKE_UP) {
       continue;
     }
+    curCollState_ = CurrentCollState::WAIT_START;
+    cudaError_t res = cudaEventSynchronize(curEvent_->start.get());
+    {
+      std::lock_guard<std::mutex> lock(workerMutex_);
+      curEvent_->coll.startTs = std::chrono::high_resolution_clock::now();
+    }
     curCollState_ = CurrentCollState::IN_PROGRESS;
-    cudaError_t res = cudaEventSynchronize(curEvent_->stop.get());
+    res = cudaEventSynchronize(curEvent_->stop.get());
     curCollState_ = CurrentCollState::DONE;
     float latency = -1;
 
@@ -367,7 +374,9 @@ bool CollTrace::logCollSample(CollTraceColl& coll) {
   intMap["nChannels"] = coll.info.nChannels;
   intMap["nThreads"] = coll.info.nThreads;
   intMap["latency (microseconds)"] = 1000 * coll.latency;
-
+  intMap["startTs"] = std::chrono::duration_cast<std::chrono::microseconds>(
+                          coll.startTs.time_since_epoch())
+                          .count();
   ncclFbLogSample("nccl_coll_trace", normalMap, intMap);
   return true;
 }
@@ -387,7 +396,8 @@ static std::vector<std::string> collKeys = {
     "channelId",
     "nChannels",
     "nThreads",
-    "latencyUs"};
+    "latencyUs",
+    "startTs"};
 
 std::unordered_map<std::string, std::string> CollTraceColl::retrieveMap(
     bool quoted) {
@@ -418,6 +428,10 @@ std::unordered_map<std::string, std::string> CollTraceColl::retrieveMap(
   infoMap["nChannels"] = std::to_string(info.nChannels);
   infoMap["nThreads"] = std::to_string(info.nThreads);
   infoMap["latencyUs"] = std::to_string(latency < 0 ? -1 : latency * 1000);
+  infoMap["startTs"] =
+      std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(
+                          startTs.time_since_epoch())
+                          .count());
   return infoMap;
 }
 
