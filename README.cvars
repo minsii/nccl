@@ -1129,6 +1129,14 @@ Description:
 Type: stringlist
 Default: None
 
+NCCL_PROXYTRACE_RECORD_MAX
+Description:
+    Maximum amount of past collectives ProxyTrace will record per communicator.
+    If the amount of collective exceeds this value, the oldest one will be
+    dropped. Set the value to -1 will make ProxyTrace record all collectives.
+Type: int
+Default: 20
+
 NCCL_PROXY_APPEND_BATCH_SIZE
 Description:
     Hidden variable. No description provided.

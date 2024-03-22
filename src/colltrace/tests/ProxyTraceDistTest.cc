@@ -5,9 +5,12 @@
 #include <gtest/gtest.h>
 #include <nccl.h>
 #include <stdlib.h>
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <sstream>
+#include <unordered_map>
+
 #include "Ctran.h"
 #include "ExtUtils.h"
 #include "ProxyMock.h"
@@ -90,11 +93,23 @@ class ProxyTraceTest : public ::testing::Test {
     }
   }
 
+  void checkPastCollsUnderLimit(std::deque<ProxyTraceColl> pastColls) {
+    std::unordered_map<uint64_t, uint64_t> commToCount;
+    for (const auto& coll : pastColls) {
+      commToCount[coll.collInfo.commHash]++;
+    }
+    for (const auto& [commHash, count] : commToCount) {
+      EXPECT_LE(count, NCCL_PROXYTRACE_RECORD_MAX);
+    }
+  }
+
   // Common check for dumpping after finished collectives
   void checkCompletedDump(ProxyTrace::Dump& dump, int nCompletedColls) {
     EXPECT_EQ(dump.activeOps.size(), 0);
     EXPECT_EQ(dump.pastOps.size(), 0);
-    EXPECT_EQ(dump.pastColls.size(), nCompletedColls);
+    if (dump.pastColls.size() < NCCL_PROXYTRACE_RECORD_MAX) {
+      EXPECT_EQ(dump.pastColls.size(), nCompletedColls);
+    }
   }
 
   struct SendFailureConfig {
@@ -282,6 +297,96 @@ checkPastColl(ProxyTraceColl& past, uint64_t opCount, ncclComm* comm) {
   EXPECT_EQ(past.collInfo.commHash, comm->commHash);
   EXPECT_EQ(past.collInfo.opCount, opCount);
   EXPECT_GT(past.collInfo.nChannels, 0);
+}
+
+TEST_F(ProxyTraceTest, PastCollNoDropUnderLimit) {
+  auto traceGuard = EnvRAII(NCCL_PROXYTRACE, {"trace"});
+  auto recordGuard = EnvRAII(
+      NCCL_PROXYTRACE_RECORD_MAX, std::max(NCCL_PROXYTRACE_RECORD_MAX, 100));
+
+  NcclCommRAII comm{this->globalRank, this->numRanks, this->localRank};
+
+  if (comm->nNodes < 2) {
+    GTEST_SKIP() << "Skipping test since nNodes < 2";
+  }
+
+  EXPECT_THAT(comm->proxyState->trace, ::testing::NotNull());
+
+  const int count = 1048500;
+  const int nColl = NCCL_PROXYTRACE_RECORD_MAX - 10;
+
+  uint64_t opCountStart = comm->opCount;
+
+  runAllReduce(count, nColl, comm);
+  CUDACHECK_TEST(cudaStreamSynchronize(stream));
+
+  // FIXME: last a few tail sends may not be finished when kernel is done;
+  // Sleep 3 sec to wait as workaround. How to check it properly?
+  sleep(3);
+
+  auto dump = comm->proxyState->trace->dump(comm->commHash);
+  checkCompletedDump(dump, nColl);
+  checkPastCollsUnderLimit(dump.pastColls);
+}
+
+TEST_F(ProxyTraceTest, TestRecordNoDropByEnv) {
+  auto traceGuard = EnvRAII(NCCL_PROXYTRACE, {"trace"});
+  auto recordGuard = EnvRAII(NCCL_PROXYTRACE_RECORD_MAX, -1);
+
+  NcclCommRAII comm{this->globalRank, this->numRanks, this->localRank};
+
+  if (comm->nNodes < 2) {
+    GTEST_SKIP() << "Skipping test since nNodes < 2";
+  }
+
+  EXPECT_THAT(comm->proxyState->trace, ::testing::NotNull());
+
+  const int count = 1048500;
+  const int nColl = std::max(NCCL_PROXYTRACE_RECORD_MAX_DEFAULT, 100) * 5;
+
+  uint64_t opCountStart = comm->opCount;
+
+  runAllReduce(count, nColl, comm);
+  CUDACHECK_TEST(cudaStreamSynchronize(stream));
+
+  // FIXME: last a few tail sends may not be finished when kernel is done;
+  // Sleep 3 sec to wait as workaround. How to check it properly?
+  sleep(3);
+
+  auto dump = comm->proxyState->trace->dump(comm->commHash);
+  checkCompletedDump(dump, nColl);
+  EXPECT_EQ(dump.pastColls.size(), nColl);
+}
+
+TEST_F(ProxyTraceTest, TestRecordDropExceedLimit) {
+  auto traceGuard = EnvRAII(NCCL_PROXYTRACE, {"trace"});
+  auto recordGuard = EnvRAII(
+      NCCL_PROXYTRACE_RECORD_MAX,
+      std::max(NCCL_PROXYTRACE_RECORD_MAX_DEFAULT, 100));
+
+  NcclCommRAII comm{this->globalRank, this->numRanks, this->localRank};
+
+  if (comm->nNodes < 2) {
+    GTEST_SKIP() << "Skipping test since nNodes < 2";
+  }
+
+  EXPECT_THAT(comm->proxyState->trace, ::testing::NotNull());
+
+  const int count = 1048500;
+  const int nColl = NCCL_PROXYTRACE_RECORD_MAX * 5;
+
+  uint64_t opCountStart = comm->opCount;
+
+  runAllReduce(count, nColl, comm);
+  CUDACHECK_TEST(cudaStreamSynchronize(stream));
+
+  // FIXME: last a few tail sends may not be finished when kernel is done;
+  // Sleep 3 sec to wait as workaround. How to check it properly?
+  sleep(3);
+
+  auto dump = comm->proxyState->trace->dump(comm->commHash);
+  checkCompletedDump(dump, nColl);
+  checkPastCollsUnderLimit(dump.pastColls);
 }
 
 TEST_F(ProxyTraceTest, QueryFinishedAllReduce) {

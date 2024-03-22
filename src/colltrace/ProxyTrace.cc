@@ -23,6 +23,14 @@
      trace - enable trace only.
      verbose - print every proxy operation step as NCCL INFO log.
 
+ - name        : NCCL_PROXYTRACE_RECORD_MAX
+   type        : int
+   default     : 20
+   description : |-
+     Maximum amount of past collectives ProxyTrace will record per communicator.
+     If the amount of collective exceeds this value, the oldest one will be
+     dropped. Set the value to -1 will make ProxyTrace record all collectives.
+
 === END_NCCL_CVAR_INFO_BLOCK ===
 */
 
@@ -222,6 +230,10 @@ inline ncclResult_t ProxyTrace::completeTraceEntries(
       }
 
       pastColls_[commHash].push_back(std::move(coll));
+      if (NCCL_PROXYTRACE_RECORD_MAX >= 0 &&
+          pastColls_[commHash].size() > NCCL_PROXYTRACE_RECORD_MAX) {
+        pastColls_[commHash].pop_front();
+      }
       activeColls_[commHash].erase(opCount);
     }
   }

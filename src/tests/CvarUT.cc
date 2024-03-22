@@ -3203,6 +3203,31 @@ TEST_F(CvarTest, NCCL_PROXYTRACE_warn_dup_val) {
   testWarn("NCCL_PROXYTRACE", "Duplicate token");
 }
 
+TEST_F(CvarTest, NCCL_PROXYTRACE_RECORD_MAX_value_0) {
+  testNumValue<int>("NCCL_PROXYTRACE_RECORD_MAX", 0);
+  EXPECT_EQ(NCCL_PROXYTRACE_RECORD_MAX, 0);
+}
+
+TEST_F(CvarTest, NCCL_PROXYTRACE_RECORD_MAX_value_1) {
+  testNumValue<int>("NCCL_PROXYTRACE_RECORD_MAX", 9999);
+  EXPECT_EQ(NCCL_PROXYTRACE_RECORD_MAX, 9999);
+}
+
+TEST_F(CvarTest, NCCL_PROXYTRACE_RECORD_MAX_value_2) {
+  testNumValue<int>("NCCL_PROXYTRACE_RECORD_MAX", std::numeric_limits<int>::max());
+  EXPECT_EQ(NCCL_PROXYTRACE_RECORD_MAX, std::numeric_limits<int>::max());
+}
+
+TEST_F(CvarTest, NCCL_PROXYTRACE_RECORD_MAX_value_3) {
+  testNumValue<int>("NCCL_PROXYTRACE_RECORD_MAX", std::numeric_limits<int>::min());
+  EXPECT_EQ(NCCL_PROXYTRACE_RECORD_MAX, std::numeric_limits<int>::min());
+}
+
+TEST_F(CvarTest, NCCL_PROXYTRACE_RECORD_MAX_default_value) {
+  testDefaultValue("NCCL_PROXYTRACE_RECORD_MAX");
+  EXPECT_EQ(NCCL_PROXYTRACE_RECORD_MAX, 20);
+}
+
 TEST_F(CvarTest, NCCL_PROXY_APPEND_BATCH_SIZE_value_0) {
   testNumValue<int64_t>("NCCL_PROXY_APPEND_BATCH_SIZE", 0);
   EXPECT_EQ(NCCL_PROXY_APPEND_BATCH_SIZE, 0);
