@@ -84,6 +84,9 @@ extern std::vector<std::string> NCCL_COLLTRACE_DEFAULT;
 extern std::string NCCL_COLLTRACE_DIR;
 extern std::string NCCL_COLLTRACE_DIR_DEFAULT;
 
+extern int NCCL_COLLTRACE_RECORD_MAX;
+extern int NCCL_COLLTRACE_RECORD_MAX_DEFAULT;
+
 extern int64_t NCCL_COMM_BLOCKING;
 extern int64_t NCCL_COMM_BLOCKING_DEFAULT;
 

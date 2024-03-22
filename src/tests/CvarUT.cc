@@ -488,6 +488,31 @@ TEST_F(CvarTest, NCCL_COLLTRACE_DIR_value_1) {
   EXPECT_EQ(NCCL_COLLTRACE_DIR, "val2_with_space");
 }
 
+TEST_F(CvarTest, NCCL_COLLTRACE_RECORD_MAX_value_0) {
+  testNumValue<int>("NCCL_COLLTRACE_RECORD_MAX", 0);
+  EXPECT_EQ(NCCL_COLLTRACE_RECORD_MAX, 0);
+}
+
+TEST_F(CvarTest, NCCL_COLLTRACE_RECORD_MAX_value_1) {
+  testNumValue<int>("NCCL_COLLTRACE_RECORD_MAX", 9999);
+  EXPECT_EQ(NCCL_COLLTRACE_RECORD_MAX, 9999);
+}
+
+TEST_F(CvarTest, NCCL_COLLTRACE_RECORD_MAX_value_2) {
+  testNumValue<int>("NCCL_COLLTRACE_RECORD_MAX", std::numeric_limits<int>::max());
+  EXPECT_EQ(NCCL_COLLTRACE_RECORD_MAX, std::numeric_limits<int>::max());
+}
+
+TEST_F(CvarTest, NCCL_COLLTRACE_RECORD_MAX_value_3) {
+  testNumValue<int>("NCCL_COLLTRACE_RECORD_MAX", std::numeric_limits<int>::min());
+  EXPECT_EQ(NCCL_COLLTRACE_RECORD_MAX, std::numeric_limits<int>::min());
+}
+
+TEST_F(CvarTest, NCCL_COLLTRACE_RECORD_MAX_default_value) {
+  testDefaultValue("NCCL_COLLTRACE_RECORD_MAX");
+  EXPECT_EQ(NCCL_COLLTRACE_RECORD_MAX, 20);
+}
+
 TEST_F(CvarTest, NCCL_COMM_BLOCKING_value_0) {
   testNumValue<int64_t>("NCCL_COMM_BLOCKING", 0);
   EXPECT_EQ(NCCL_COMM_BLOCKING, 0);

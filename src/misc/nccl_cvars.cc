@@ -235,6 +235,8 @@ std::vector<std::string> NCCL_COLLTRACE;
 std::vector<std::string> NCCL_COLLTRACE_DEFAULT;
 std::string NCCL_COLLTRACE_DIR;
 std::string NCCL_COLLTRACE_DIR_DEFAULT;
+int NCCL_COLLTRACE_RECORD_MAX;
+int NCCL_COLLTRACE_RECORD_MAX_DEFAULT;
 int64_t NCCL_COMM_BLOCKING;
 int64_t NCCL_COMM_BLOCKING_DEFAULT;
 std::string NCCL_COMM_ID;
@@ -532,6 +534,7 @@ void initEnvSet(std::unordered_set<std::string>& env) {
   env.insert("NCCL_COLLNET_NODE_THRESHOLD");
   env.insert("NCCL_COLLTRACE");
   env.insert("NCCL_COLLTRACE_DIR");
+  env.insert("NCCL_COLLTRACE_RECORD_MAX");
   env.insert("NCCL_COMM_BLOCKING");
   env.insert("NCCL_COMM_ID");
   env.insert("NCCL_COMM_SPLIT_SHARE_RESOURCES");
@@ -778,6 +781,9 @@ void readCvarEnv() {
 
   NCCL_COLLTRACE_DIR = env2str("NCCL_COLLTRACE_DIR", "");
   NCCL_COLLTRACE_DIR_DEFAULT = env2str("NCCL_ENV_DO_NOT_SET", "");
+
+  NCCL_COLLTRACE_RECORD_MAX = env2num<int>("NCCL_COLLTRACE_RECORD_MAX", "20");
+  NCCL_COLLTRACE_RECORD_MAX_DEFAULT = env2num<int>("NCCL_ENV_DO_NOT_SET", "20");
 
   NCCL_COMM_BLOCKING = env2num<int64_t>("NCCL_COMM_BLOCKING", "-1");
   NCCL_COMM_BLOCKING_DEFAULT = env2num<int64_t>("NCCL_ENV_DO_NOT_SET", "-1");

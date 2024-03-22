@@ -1,22 +1,22 @@
 // (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
+#include <unistd.h>
+#include <algorithm>
+#include <chrono>
+#include <cstdint>
+#include <fstream>
+#include <memory>
+#include <mutex>
+#include <sstream>
+#include <string>
+
 #include "CollTrace.h"
+#include "ExtChecks.h"
+#include "ExtUtils.h"
 #include "FbInternal.h"
 #include "bootstrap.h"
 #include "comm.h"
 #include "nccl.h"
-#include "ExtChecks.h"
-
-#include "ExtUtils.h"
-#include <algorithm>
-#include <cstdint>
-#include <memory>
-#include <mutex>
-#include <string>
-#include <unistd.h>
-#include <chrono>
-#include <fstream>
-#include <sstream>
 
 /*
 === BEGIN_NCCL_CVAR_INFO_BLOCK ===
@@ -41,6 +41,14 @@
    description : |-
      Directory for CollTrace to dump.
      Can be either local or FB internal remote URL.
+
+ - name        : NCCL_COLLTRACE_RECORD_MAX
+   type        : int
+   default     : 20
+   description : |-
+     Maximum amount of past collectives CollTrace will record.
+     If the amount of collective exceeds this value, the oldest one will be
+     dropped. Set the value to -1 will make CollTrace record all collectives.
 
 === END_NCCL_CVAR_INFO_BLOCK ===
 */
@@ -124,8 +132,7 @@ CollTrace::~CollTrace() {
         comm_->commHash,
         comm_->rank,
         e.what());
-  }
-  catch(...) {
+  } catch (...) {
     WARN(
         "COLLTRACE: comm %p commHash %lx rank %d - Destroy FAILED: Unkown exception",
         comm_,
@@ -240,7 +247,8 @@ void* CollTrace::collTraceThreadFnImpl() {
     float latency = -1;
 
     if (res == cudaSuccess) {
-      res = cudaEventElapsedTime(&latency, curEvent_->start.get(), curEvent_->stop.get());
+      res = cudaEventElapsedTime(
+          &latency, curEvent_->start.get(), curEvent_->stop.get());
     }
 
     {
@@ -262,6 +270,10 @@ void* CollTrace::collTraceThreadFnImpl() {
 
       std::lock_guard<std::mutex> lock(workerMutex_);
       pastColls_.push_back(std::move(result));
+      if (NCCL_COLLTRACE_RECORD_MAX >= 0 &&
+          pastColls_.size() > NCCL_COLLTRACE_RECORD_MAX) {
+        pastColls_.pop_front();
+      }
     }
 
     // Free the event objects
@@ -271,8 +283,7 @@ void* CollTrace::collTraceThreadFnImpl() {
     // FIXME: we should revisit bootstrapAllGather() here since commAbort
     // may be called either on local rank or a remote rank causing socket
     // failure
-    if (comm_->tuner != NULL &&
-        features & CollTrace::Features::ONLINE_TUNING) {
+    if (comm_->tuner != NULL && features & CollTrace::Features::ONLINE_TUNING) {
       // Online tuning - average latencies across ranks & send to tuner
       float* latencies = NULL;
       NCCLCHECKIGNORE(
@@ -406,7 +417,7 @@ std::unordered_map<std::string, std::string> CollTraceColl::retrieveMap(
   infoMap["channelId"] = std::to_string(info.channelId);
   infoMap["nChannels"] = std::to_string(info.nChannels);
   infoMap["nThreads"] = std::to_string(info.nThreads);
-  infoMap["latencyUs"] = std::to_string(latency < 0 ? -1: latency * 1000);
+  infoMap["latencyUs"] = std::to_string(latency < 0 ? -1 : latency * 1000);
   return infoMap;
 }
 
@@ -442,7 +453,7 @@ ncclResult_t collTraceDestroy(ncclComm* comm) {
     comm->collTrace.reset();
   }
   // Try catch clause here is not going to be useful as destructors are noexcept
-  // by default. Instead of throwing an exception it will just crash the program.
-  // We need to think about a better way to handle this.
+  // by default. Instead of throwing an exception it will just crash the
+  // program. We need to think about a better way to handle this.
   return ncclSuccess;
 }

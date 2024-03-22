@@ -170,6 +170,14 @@ Description:
 Type: string
 Default: 
 
+NCCL_COLLTRACE_RECORD_MAX
+Description:
+    Maximum amount of past collectives CollTrace will record.
+    If the amount of collective exceeds this value, the oldest one will be
+    dropped. Set the value to -1 will make CollTrace record all collectives.
+Type: int
+Default: 20
+
 NCCL_COMM_BLOCKING
 Description:
     The NCCL_COMM_BLOCKING variable controls whether NCCL calls are

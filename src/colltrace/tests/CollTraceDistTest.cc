@@ -412,6 +412,77 @@ TEST_F(CollTraceTest, ReportToLog) {
   logFile.close();
 }
 
+TEST_F(CollTraceTest, TestRecordNoDropBelowLimit) {
+  auto traceGuard = EnvRAII(NCCL_COLLTRACE, {"trace"});
+  auto recordGuard =
+      EnvRAII(NCCL_COLLTRACE_RECORD_MAX, NCCL_COLLTRACE_RECORD_MAX_DEFAULT);
+
+  NcclCommRAII comm{this->globalRank, this->numRanks, this->localRank};
+  const int count = 1048576;
+  if (NCCL_COLLTRACE_RECORD_MAX_DEFAULT <= 1) {
+    GTEST_SKIP()
+        << "NCCL_COLLTRACE_RECORD_MAX_DEFAULT is too small. Skipping test.";
+  }
+  const int nColl = std::max(NCCL_COLLTRACE_RECORD_MAX - 5, 1);
+
+  prepareAllreduce(count);
+  for (int i = 0; i < nColl; i++) {
+    NCCLCHECK_TEST(
+        ncclAllReduce(sendBuf, recvBuf, count, ncclInt, ncclSum, comm, stream));
+  }
+  EXPECT_THAT(comm->collTrace, testing::NotNull());
+
+  comm->collTrace->waitForWorkerFinishQueue();
+
+  auto traceDump = comm->collTrace->dump();
+  EXPECT_EQ(traceDump.pastColls.size(), nColl);
+}
+
+TEST_F(CollTraceTest, TestRecordNoDropByEnv) {
+  auto traceGuard = EnvRAII(NCCL_COLLTRACE, {"trace"});
+  auto recordGuard = EnvRAII(NCCL_COLLTRACE_RECORD_MAX, -1);
+
+  NcclCommRAII comm{this->globalRank, this->numRanks, this->localRank};
+  const int count = 1048576;
+  const int nColl = std::max(NCCL_COLLTRACE_RECORD_MAX_DEFAULT, 100) * 5;
+
+  prepareAllreduce(count);
+  for (int i = 0; i < nColl; i++) {
+    NCCLCHECK_TEST(
+        ncclAllReduce(sendBuf, recvBuf, count, ncclInt, ncclSum, comm, stream));
+  }
+
+  EXPECT_THAT(comm->collTrace, testing::NotNull());
+
+  comm->collTrace->waitForWorkerFinishQueue();
+
+  auto traceDump = comm->collTrace->dump();
+  EXPECT_EQ(traceDump.pastColls.size(), nColl);
+}
+
+TEST_F(CollTraceTest, TestRecordDropOverLIMIT) {
+  auto traceGuard = EnvRAII(NCCL_COLLTRACE, {"trace"});
+  auto recordGuard =
+      EnvRAII(NCCL_COLLTRACE_RECORD_MAX, NCCL_COLLTRACE_RECORD_MAX_DEFAULT);
+
+  NcclCommRAII comm{this->globalRank, this->numRanks, this->localRank};
+  const int count = 1048576;
+  const int nColl = std::max(NCCL_COLLTRACE_RECORD_MAX_DEFAULT, 100) * 5;
+
+  prepareAllreduce(count);
+  for (int i = 0; i < nColl; i++) {
+    NCCLCHECK_TEST(
+        ncclAllReduce(sendBuf, recvBuf, count, ncclInt, ncclSum, comm, stream));
+  }
+
+  EXPECT_THAT(comm->collTrace, testing::NotNull());
+
+  comm->collTrace->waitForWorkerFinishQueue();
+
+  auto traceDump = comm->collTrace->dump();
+  EXPECT_EQ(traceDump.pastColls.size(), NCCL_COLLTRACE_RECORD_MAX);
+}
+
 int main(int argc, char* argv[]) {
   ::testing::InitGoogleTest(&argc, argv);
   ::testing::AddGlobalTestEnvironment(new MPIEnvironment);
