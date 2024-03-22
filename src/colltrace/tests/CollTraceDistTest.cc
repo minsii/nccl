@@ -6,6 +6,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <nccl.h>
+#include <rfe/scubadata/ScubaData.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <cstddef>
@@ -14,7 +15,7 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
-#include <rfe/scubadata/ScubaData.h>
+
 #include "Ctran.h"
 #include "checks.h"
 #include "json/json.h"
@@ -71,7 +72,7 @@ class CollTraceTest : public ::testing::Test {
     CUDACHECK_TEST(cudaMalloc(&recvBuf, count * sizeof(int)));
   }
 
-  bool prepareDumpDir(const std::string &dir) {
+  bool prepareDumpDir(const std::string& dir) {
     try {
       // always re-create a fresh dir to ensure output files are up-to-date
       if (std::filesystem::exists(dir)) {
@@ -99,14 +100,11 @@ class CollTraceTest : public ::testing::Test {
 };
 
 TEST_F(CollTraceTest, TraceFeatureEnableCollTrace) {
-  // overwrite CollTrace features before creating comm
-  NCCL_COLLTRACE.push_back("trace");
+  auto traceGuard = EnvRAII(NCCL_COLLTRACE, {"trace"});
   testing::internal::CaptureStdout();
-  ncclComm_t comm =
-      createNcclComm(this->globalRank, this->numRanks, this->localRank);
+  NcclCommRAII comm{this->globalRank, this->numRanks, this->localRank};
   const int count = 1048576;
   const int nColl = 10;
-
 
   prepareAllreduce(count);
   for (int i = 0; i < nColl; i++) {
@@ -114,21 +112,19 @@ TEST_F(CollTraceTest, TraceFeatureEnableCollTrace) {
         ncclAllReduce(sendBuf, recvBuf, count, ncclInt, ncclSum, comm, stream));
   }
   CUDACHECK_TEST(cudaStreamSynchronize(stream));
-
-  NCCLCHECK_TEST(ncclCommDestroy(comm));
 
   std::string output = testing::internal::GetCapturedStdout();
   //
-  EXPECT_THAT(output, testing::HasSubstr("enabled features: trace - Init COMPLETE"));
-  EXPECT_THAT(output, testing::Not(testing::HasSubstr("COLLTRACE initialization failed")));
-  NCCL_COLLTRACE.clear();
+  EXPECT_THAT(
+      output, testing::HasSubstr("enabled features: trace - Init COMPLETE"));
+  EXPECT_THAT(
+      output,
+      testing::Not(testing::HasSubstr("COLLTRACE initialization failed")));
 }
 
 TEST_F(CollTraceTest, VerboseAllReduce) {
-  // overwrite CollTrace features before creating comm
-  NCCL_COLLTRACE.push_back("verbose");
-  ncclComm_t comm =
-      createNcclComm(this->globalRank, this->numRanks, this->localRank);
+  auto traceGuard = EnvRAII(NCCL_COLLTRACE, {"verbose"});
+  NcclCommRAII comm{this->globalRank, this->numRanks, this->localRank};
   const int count = 1048576;
   const int nColl = 10;
 
@@ -141,7 +137,7 @@ TEST_F(CollTraceTest, VerboseAllReduce) {
   }
   CUDACHECK_TEST(cudaStreamSynchronize(stream));
 
-  NCCLCHECK_TEST(ncclCommDestroy(comm));
+  comm->collTrace->waitForWorkerFinishQueue();
 
   std::string output = testing::internal::GetCapturedStdout();
   for (int i = 0; i < nColl; i++) {
@@ -150,14 +146,11 @@ TEST_F(CollTraceTest, VerboseAllReduce) {
     std::string traceLog = ss.str();
     EXPECT_THAT(output, testing::HasSubstr(traceLog));
   }
-  NCCL_COLLTRACE.clear();
 }
 
 TEST_F(CollTraceTest, VerboseAllToAll) {
-  // overwrite CollTrace features before creating comm
-  NCCL_COLLTRACE.push_back("verbose");
-  ncclComm_t comm =
-      createNcclComm(this->globalRank, this->numRanks, this->localRank);
+  auto traceGuard = EnvRAII(NCCL_COLLTRACE, {"verbose"});
+  NcclCommRAII comm{this->globalRank, this->numRanks, this->localRank};
   const int count = 1048576;
   const int nColl = 10;
 
@@ -169,7 +162,7 @@ TEST_F(CollTraceTest, VerboseAllToAll) {
         ncclAllToAll(sendBuf, recvBuf, count, ncclInt, comm, stream));
   }
   CUDACHECK_TEST(cudaStreamSynchronize(stream));
-  NCCLCHECK_TEST(ncclCommDestroy(comm));
+  comm->collTrace->waitForWorkerFinishQueue();
 
   std::string output = testing::internal::GetCapturedStdout();
   for (int i = 0; i < nColl; i++) {
@@ -178,14 +171,11 @@ TEST_F(CollTraceTest, VerboseAllToAll) {
     std::string traceLog = ss.str();
     EXPECT_THAT(output, testing::HasSubstr(traceLog));
   }
-  NCCL_COLLTRACE.clear();
 }
 
 TEST_F(CollTraceTest, VerboseSendRecv) {
-  // overwrite CollTrace features before creating comm
-  NCCL_COLLTRACE.push_back("verbose");
-  ncclComm_t comm =
-      createNcclComm(this->globalRank, this->numRanks, this->localRank);
+  auto traceGuard = EnvRAII(NCCL_COLLTRACE, {"verbose"});
+  NcclCommRAII comm{this->globalRank, this->numRanks, this->localRank};
   const int count = 1048576;
   const int nColl = 10;
 
@@ -200,7 +190,7 @@ TEST_F(CollTraceTest, VerboseSendRecv) {
     NCCLCHECK_TEST(ncclGroupEnd());
   }
   CUDACHECK_TEST(cudaStreamSynchronize(stream));
-  NCCLCHECK_TEST(ncclCommDestroy(comm));
+  comm->collTrace->waitForWorkerFinishQueue();
 
   std::string output = testing::internal::GetCapturedStdout();
   for (int i = 0; i < nColl; i++) {
@@ -209,7 +199,6 @@ TEST_F(CollTraceTest, VerboseSendRecv) {
     std::string traceLog = ss.str();
     EXPECT_THAT(output, testing::HasSubstr(traceLog));
   }
-  NCCL_COLLTRACE.clear();
 }
 
 TEST_F(CollTraceTest, VerboseSendOrRecv) {
@@ -217,10 +206,8 @@ TEST_F(CollTraceTest, VerboseSendOrRecv) {
     GTEST_SKIP() << "This test requires even number of ranks";
   }
 
-  // overwrite CollTrace features before creating comm
-  NCCL_COLLTRACE.push_back("verbose");
-  ncclComm_t comm =
-      createNcclComm(this->globalRank, this->numRanks, this->localRank);
+  auto traceGuard = EnvRAII(NCCL_COLLTRACE, {"verbose"});
+  NcclCommRAII comm{this->globalRank, this->numRanks, this->localRank};
   const int count = 1048576;
   const int nColl = 10;
 
@@ -238,7 +225,7 @@ TEST_F(CollTraceTest, VerboseSendOrRecv) {
     }
   }
   CUDACHECK_TEST(cudaStreamSynchronize(stream));
-  NCCLCHECK_TEST(ncclCommDestroy(comm));
+  comm->collTrace->waitForWorkerFinishQueue();
 
   std::string output = testing::internal::GetCapturedStdout();
   for (int i = 0; i < nColl; i++) {
@@ -251,14 +238,11 @@ TEST_F(CollTraceTest, VerboseSendOrRecv) {
     std::string traceLog = ss.str();
     EXPECT_THAT(output, testing::HasSubstr(traceLog));
   }
-  NCCL_COLLTRACE.clear();
 }
 
 TEST_F(CollTraceTest, DumpAllFinished) {
-  // overwrite CollTrace features before creating comm
-  NCCL_COLLTRACE.push_back("trace");
-  ncclComm_t comm =
-      createNcclComm(this->globalRank, this->numRanks, this->localRank);
+  auto traceGuard = EnvRAII(NCCL_COLLTRACE, {"trace"});
+  NcclCommRAII comm{this->globalRank, this->numRanks, this->localRank};
   const int count = 1048576;
   const int nColl = 10;
 
@@ -273,17 +257,11 @@ TEST_F(CollTraceTest, DumpAllFinished) {
   auto dump = comm->collTrace->dump();
   EXPECT_EQ(dump.pastColls.size(), nColl);
   EXPECT_EQ(dump.currentColl, nullptr);
-
-  NCCLCHECK_TEST(ncclCommDestroy(comm));
-
-  NCCL_COLLTRACE.clear();
 }
 
 TEST_F(CollTraceTest, DumpWithUnfinished) {
-  // overwrite CollTrace features before creating comm
-  NCCL_COLLTRACE.push_back("trace");
-  ncclComm_t comm =
-      createNcclComm(this->globalRank, this->numRanks, this->localRank);
+  auto traceGuard = EnvRAII(NCCL_COLLTRACE, {"trace"});
+  NcclCommRAII comm{this->globalRank, this->numRanks, this->localRank};
   const int count = 1048576;
   const int nColl = 10;
 
@@ -307,21 +285,16 @@ TEST_F(CollTraceTest, DumpWithUnfinished) {
   EXPECT_TRUE(dump.pastColls.size() >= nColl);
   // +1 for the extra wakeup event that might be created by dump() function
   EXPECT_TRUE(dump.pendingColls.size() <= nColl);
-
-  NCCLCHECK_TEST(ncclCommDestroy(comm));
-
-  NCCL_COLLTRACE.clear();
 }
 
 TEST_F(CollTraceTest, TestScubaDump) {
-  #ifndef ENABLE_FB_INTERNAL
+#ifndef ENABLE_FB_INTERNAL
   GTEST_SKIP() << "This test requires FB internal build";
-  #endif
+#endif
 
   // overwrite CollTrace features before creating comm
-  NCCL_COLLTRACE.push_back("fb");
-  ncclComm_t comm =
-      createNcclComm(this->globalRank, this->numRanks, this->localRank);
+  auto traceGuard = EnvRAII(NCCL_COLLTRACE, {"fb"});
+  NcclCommRAII comm{this->globalRank, this->numRanks, this->localRank};
   const int count = 1048576;
   const int nColl = 10;
 
@@ -336,8 +309,7 @@ TEST_F(CollTraceTest, TestScubaDump) {
        << " opName: " << sample->getNormalValue("opName")
        << " sendbuff: " << std::hex << sample->getIntValue("sendbuff")
        << " recvbuff: " << std::hex << sample->getIntValue("recvbuff")
-       << " count: " << std::hex << sample->getIntValue("count")
-       << std::endl;
+       << " count: " << std::hex << sample->getIntValue("count") << std::endl;
     std::string traceLog = ss.str();
     fwrite(traceLog.c_str(), 1, traceLog.size(), stdout);
   };
@@ -362,33 +334,30 @@ TEST_F(CollTraceTest, TestScubaDump) {
     std::stringstream ss;
     ss << "COLLTRACE TEST: logging to scuba:"
        << " commHash: " << std::hex << coll.info.comm->commHash
-       << " opCount: " << std::hex << coll.opCount
-       << " stream: " << std::hex << reinterpret_cast<uint64_t>(coll.stream)
-       << " iteration: " << std::hex << coll.iteration
-       << " opName: " << coll.info.opName
-       << " sendbuff: " << std::hex << reinterpret_cast<uint64_t>(coll.info.sendbuff)
-       << " recvbuff: " << std::hex << reinterpret_cast<uint64_t>(coll.info.recvbuff)
+       << " opCount: " << std::hex << coll.opCount << " stream: " << std::hex
+       << reinterpret_cast<uint64_t>(coll.stream) << " iteration: " << std::hex
+       << coll.iteration << " opName: " << coll.info.opName
+       << " sendbuff: " << std::hex
+       << reinterpret_cast<uint64_t>(coll.info.sendbuff)
+       << " recvbuff: " << std::hex
+       << reinterpret_cast<uint64_t>(coll.info.recvbuff)
        << " count: " << std::hex << static_cast<uint64_t>(coll.info.count)
        << std::endl;
     std::string traceLog = ss.str();
     EXPECT_THAT(output, testing::HasSubstr(traceLog));
   }
-
-  NCCLCHECK_TEST(ncclCommDestroy(comm));
-  NCCL_COLLTRACE.clear();
 }
 
 TEST_F(CollTraceTest, ReportToLog) {
-  // overwrite CollTrace features before creating comm
-  NCCL_COLLTRACE.push_back("file");
-  NCCL_COLLTRACE_DIR = "/tmp/colltrace_test";
+  auto traceGuard = EnvRAII(NCCL_COLLTRACE, {"file"});
+  auto dirGuard =
+      EnvRAII(NCCL_COLLTRACE_DIR, std::string{"/tmp/colltrace_test"});
 
   if (!prepareDumpDir(NCCL_COLLTRACE_DIR)) {
     GTEST_SKIP() << "Failed to create dump directory. Skipping test.";
   }
 
-  ncclComm_t comm =
-      createNcclComm(this->globalRank, this->numRanks, this->localRank);
+  NcclCommRAII comm{this->globalRank, this->numRanks, this->localRank};
   const int count = 1048576;
   const int nColl = 10;
 
@@ -441,9 +410,6 @@ TEST_F(CollTraceTest, ReportToLog) {
     EXPECT_GT(entry["latencyUs"], 0);
   }
   logFile.close();
-
-  NCCLCHECK_TEST(ncclCommDestroy(comm));
-  NCCL_COLLTRACE.clear();
 }
 
 int main(int argc, char* argv[]) {

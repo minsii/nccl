@@ -84,16 +84,6 @@ class ProxyTraceTest : public ::testing::Test {
     }
   }
 
-  bool skipSingleNodeRun(ncclComm_t comm) {
-    if (comm->nNodes < 2) {
-      NCCLCHECK_TEST(ncclCommDestroy(comm));
-      NCCL_PROXYTRACE.clear();
-      printf("Skipping test since nNodes < 2\n");
-      return true;
-    }
-    return false;
-  }
-
   void verbosePrintPastColl(ProxyTraceColl& past, ncclComm_t comm) {
     if (comm->rank == 0 && VERBOSE) {
       printf("Rank %d past coll: %s\n", comm->rank, past.serialize().c_str());
@@ -295,13 +285,11 @@ checkPastColl(ProxyTraceColl& past, uint64_t opCount, ncclComm* comm) {
 }
 
 TEST_F(ProxyTraceTest, QueryFinishedAllReduce) {
-  // overwrite ProxyTrace features before creating comm
-  NCCL_PROXYTRACE.push_back("trace");
-  ncclComm_t comm =
-      createNcclComm(this->globalRank, this->numRanks, this->localRank);
+  auto traceGuard = EnvRAII(NCCL_PROXYTRACE, {"trace"});
+  NcclCommRAII comm{this->globalRank, this->numRanks, this->localRank};
 
-  if (skipSingleNodeRun(comm)) {
-    GTEST_SKIP();
+  if (comm->nNodes < 2) {
+    GTEST_SKIP() << "Skipping test since nNodes < 2";
   }
 
   EXPECT_NE(comm->proxyState->trace, nullptr);
@@ -329,25 +317,20 @@ TEST_F(ProxyTraceTest, QueryFinishedAllReduce) {
 
     verbosePrintPastColl(dump.pastColls[i], comm);
   }
-
-  NCCLCHECK_TEST(ncclCommDestroy(comm));
-  NCCL_PROXYTRACE.clear();
 }
 
 TEST_F(ProxyTraceTest, QueryFinishedAllToAll) {
-  // overwrite ProxyTrace features before creating comm
-  NCCL_PROXYTRACE.push_back("trace");
+  auto traceGuard = EnvRAII(NCCL_PROXYTRACE, {"trace"});
   // disable PXN so that each proxy thread can have deterministic behavior:
   // send and recv for the local rank with PPN remote ranks on the other node
   NCCL_PXN_DISABLE = 1;
   // ensure we use default proxy path
   NCCL_ALLTOALL_ALGO = NCCL_ALLTOALL_ALGO::orig;
 
-  ncclComm_t comm =
-      createNcclComm(this->globalRank, this->numRanks, this->localRank);
+  NcclCommRAII comm{this->globalRank, this->numRanks, this->localRank};
 
-  if (skipSingleNodeRun(comm)) {
-    GTEST_SKIP();
+  if (comm->nNodes < 2) {
+    GTEST_SKIP() << "Skipping test since nNodes < 2";
   }
 
   EXPECT_NE(comm->proxyState->trace, nullptr);
@@ -386,25 +369,20 @@ TEST_F(ProxyTraceTest, QueryFinishedAllToAll) {
 
     verbosePrintPastColl(dump.pastColls[i], comm);
   }
-
-  NCCLCHECK_TEST(ncclCommDestroy(comm));
-  NCCL_PROXYTRACE.clear();
 }
 
 TEST_F(ProxyTraceTest, QueryFinishedSendRecv) {
-  // overwrite ProxyTrace features before creating comm
-  NCCL_PROXYTRACE.push_back("trace");
+  auto traceGuard = EnvRAII(NCCL_PROXYTRACE, {"trace"});
   // disable PXN so that each proxy thread can have deterministic behavior:
   // send and recv for the local rank with PPN remote ranks on the other node
   NCCL_PXN_DISABLE = 1;
   // ensure we use default proxy path
   NCCL_SENDRECV_ALGO = NCCL_SENDRECV_ALGO::orig;
 
-  ncclComm_t comm =
-      createNcclComm(this->globalRank, this->numRanks, this->localRank);
+  NcclCommRAII comm{this->globalRank, this->numRanks, this->localRank};
 
-  if (skipSingleNodeRun(comm)) {
-    GTEST_SKIP();
+  if (comm->nNodes < 2) {
+    GTEST_SKIP() << "Skipping test since nNodes < 2";
   }
 
   EXPECT_NE(comm->proxyState->trace, nullptr);
@@ -448,14 +426,10 @@ TEST_F(ProxyTraceTest, QueryFinishedSendRecv) {
 
     verbosePrintPastColl(dump.pastColls[i], comm);
   }
-
-  NCCLCHECK_TEST(ncclCommDestroy(comm));
-  NCCL_PROXYTRACE.clear();
 }
 
 TEST_F(ProxyTraceTest, QueryHangAllReduce) {
-  // overwrite ProxyTrace features before creating comm
-  NCCL_PROXYTRACE.push_back("trace");
+  auto traceGuard = EnvRAII(NCCL_PROXYTRACE, {"trace"});
 
   SendFailureConfig failureConfig = {
       8 /*opCount*/,
@@ -467,11 +441,10 @@ TEST_F(ProxyTraceTest, QueryHangAllReduce) {
   };
   setMockConfig(failureConfig);
 
-  ncclComm_t comm =
-      createNcclComm(this->globalRank, this->numRanks, this->localRank);
+  NcclCommRAII comm{this->globalRank, this->numRanks, this->localRank};
 
-  if (skipSingleNodeRun(comm)) {
-    GTEST_SKIP();
+  if (comm->nNodes < 2) {
+    GTEST_SKIP() << "Skipping test since nNodes < 2";
   }
 
   EXPECT_NE(comm->proxyState->trace, nullptr);
@@ -507,22 +480,17 @@ TEST_F(ProxyTraceTest, QueryHangAllReduce) {
 
   // Now let's wait for all communication to finish
   CUDACHECK_TEST(cudaStreamSynchronize(stream));
-  NCCLCHECK_TEST(ncclCommDestroy(comm));
-
-  NCCL_PROXYTRACE.clear();
 }
 
 TEST_F(ProxyTraceTest, QueryHangSendRecv) {
-  // overwrite ProxyTrace features before creating comm
-  NCCL_PROXYTRACE.push_back("trace");
+  auto traceGuard = EnvRAII(NCCL_PROXYTRACE, {"trace"});
   // disable PXN so that each proxy thread is guaranteed to send and recv with
   // PPN remote ranks
   NCCL_PXN_DISABLE = 1;
   // ensure we use default proxy path
   NCCL_SENDRECV_ALGO = NCCL_SENDRECV_ALGO::orig;
 
-  ncclComm_t comm =
-      createNcclComm(this->globalRank, this->numRanks, this->localRank);
+  NcclCommRAII comm{this->globalRank, this->numRanks, this->localRank};
 
   SendFailureConfig failureConfig = {
       8 /*opCount*/,
@@ -535,8 +503,8 @@ TEST_F(ProxyTraceTest, QueryHangSendRecv) {
   // assumed no network communication now, so safe to reset mock instance
   setMockConfig(failureConfig);
 
-  if (skipSingleNodeRun(comm)) {
-    GTEST_SKIP();
+  if (comm->nNodes < 2) {
+    GTEST_SKIP() << "Skipping test since nNodes < 2";
   }
 
   EXPECT_NE(comm->proxyState->trace, nullptr);
@@ -579,9 +547,6 @@ TEST_F(ProxyTraceTest, QueryHangSendRecv) {
 
   // Now let's wait for all communication to finish
   CUDACHECK_TEST(cudaStreamSynchronize(stream));
-  NCCLCHECK_TEST(ncclCommDestroy(comm));
-
-  NCCL_PROXYTRACE.clear();
 }
 
 int main(int argc, char* argv[]) {
