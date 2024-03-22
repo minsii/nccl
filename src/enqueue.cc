@@ -445,7 +445,7 @@ static ncclResult_t addP2pToPlan(
 
   info.nChannels = 1; // always 1 channel for each p2p op
   PROXY_TRACE_INFO_COPY(proxyOp, info);
-
+  INFO(NCCL_COLL, "addP2pToPlan: %s addr %p bytes %ld peer %d", info.opName, addr, bytes, peer);
   NCCLCHECK(addProxyOpIfNeeded(comm, plan, &proxyOp));
   COLLTRACE_P2P_APPEND(comm, plan, info);
   return ncclSuccess;
@@ -1210,6 +1210,7 @@ ncclResult_t ncclLaunchFinish(struct ncclComm* comm) {
     // Create dependency for deviceStream on launchStream. We know that deviceStream
     // hasn't been modified since launchStream waited on it (in ncclLaunchPrepare),
     // so we can say that launchStream subsumes it.
+    INFO(NCCL_COLL, "==== Launching tasks on commHash %lx stream %p", comm->commHash, (void*)launchStream);
     NCCLCHECKGOTO(ncclStrongStreamWaitStream(tasks->capturingGraph, &comm->sharedRes->deviceStream, launchStream, /*b_subsumes_a=*/true), result, resume1);
   resume1:
     // Create dependency for other user streams (skip launch stream) on deviceStream.

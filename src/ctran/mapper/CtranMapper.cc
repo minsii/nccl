@@ -89,6 +89,11 @@ static std::unordered_map<GlobalRegistDurationType, std::string>
         {LOOKUP_HIT, "lookup-hit"},
         {LOOKUP_MISS, "lookup-miss"},
 };
+static std::unordered_map<CtranMapperRegElemState, std::string>
+    regElemStateNameMap = {
+        {CtranMapperRegElemState::CACHED, "cached"},
+        {CtranMapperRegElemState::REGISTERED, "registered"},
+};
 static std::unordered_map<uint64_t, CtranMapper*> allCommHashCtranMapperMap;
 static std::unordered_map<GlobalRegistDurationType, std::vector<double>>
     allCommRegistDurationsMap;
@@ -429,19 +434,20 @@ ncclResult_t CtranMapper::impl::regMem(
         exit);
   }
 
+  INFO(
+      NCCL_COLL,
+      "CTRAN-MAPPER: registered buffer %p len %ld, state %s -> %s",
+      mapperRegElem->buf,
+      mapperRegElem->len,
+      regElemStateNameMap[mapperRegElem->state].c_str(),
+      regElemStateNameMap[CtranMapperRegElemState::REGISTERED].c_str());
+
   mapperRegElem->state = CtranMapperRegElemState::REGISTERED;
   if (NCCL_CTRAN_REGISTER_REPORT_SNAPSHOT_COUNT >= 0) {
     this->numRegistrations++;
     this->totalNumRegistrations++;
     recordRegistDuration(GlobalRegistDurationType::REG_MEM, dur.durationMs());
   }
-
-  INFO(
-      NCCL_COLL,
-      "CTRAN-MAPPER: registered buffer %p len %ld, state %d",
-      mapperRegElem->buf,
-      mapperRegElem->len,
-      mapperRegElem->state);
 
 exit:
   return res;
@@ -458,20 +464,14 @@ ncclResult_t CtranMapper::impl::deregMem(
 
   INFO(
       NCCL_COLL,
-      "CTRAN-MAPPER: deregister buffer %p len %ld, state %d",
+      "CTRAN-MAPPER: deregistered buffer %p len %ld",
       mapperRegElem->buf,
-      mapperRegElem->len,
-      mapperRegElem->state);
+      mapperRegElem->len);
+
   if (NCCL_CTRAN_REGISTER_REPORT_SNAPSHOT_COUNT >= 0) {
     this->numRegistrations--;
     recordRegistDuration(GlobalRegistDurationType::DEREG_MEM, dur.durationMs());
   }
-
-  INFO(
-      NCCL_COLL,
-      "CTRAN-MAPPER: deregiter buffer %p len %ld",
-      mapperRegElem->buf,
-      mapperRegElem->len);
 
 exit:
   return res;

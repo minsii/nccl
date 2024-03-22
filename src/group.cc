@@ -86,7 +86,7 @@ ncclResult_t ncclGroupStart() {
   NVTX3_FUNC_RANGE_IN(nccl_domain);
 
   NCCLCHECK(ncclGroupStartInternal());
-  TRACE_CALL("ncclGroupStart()");
+  INFO(NCCL_COLL, "ncclGroupStart(), ncclGroupDepth=%d", ncclGroupDepth);
   return ret;
 }
 
@@ -94,8 +94,8 @@ NCCL_API(ncclResult_t, ncclGroupEnd);
 ncclResult_t ncclGroupEnd() {
   ncclResult_t ret = ncclSuccess;
   NVTX3_FUNC_RANGE_IN(nccl_domain);
+  INFO(NCCL_COLL, "ncclGroupEnd(), ncclGroupDepth=%d", ncclGroupDepth);
   NCCLCHECKGOTO(ncclGroupEndInternal(), ret, exit);
-  TRACE_CALL("ncclGroupEnd()");
 exit:
   return ret;
 }
@@ -119,11 +119,13 @@ static ncclResult_t doLaunches(struct ncclComm* head) {
   struct ncclComm* cliqueHead = head;
   struct ncclComm* cliqueNextHead;
   bool useBarrier = ncclParamLaunchMode == ncclLaunchModeGroup;
+
   // This outer loop iterates over cliques of comms which are siblings of the
   // same global entity. We calculate a clique as all comms which have the same
   // `intraComm0` value.
   do {
     struct ncclComm* comm = cliqueHead;
+    INFO(NCCL_COLL, "==== doLaunches commHash %lx", comm->commHash);
     bool capturingYes = false, capturingNo = false;
     do {
       (ncclCudaGraphValid(comm->tasks.capturingGraph) ? capturingYes : capturingNo) = true;

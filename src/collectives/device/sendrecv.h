@@ -17,9 +17,17 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
     if (args->peer == ncclShmem.comm.rank) {
       struct ncclWorkElemP2p* recvArgs = args-1;
       void* recvBuff = reinterpret_cast<void*>(uintptr_t(recvArgs->buffHi32)<<32 | recvArgs->buffLo32);
+
+      if (tid == 0) {
+        printf("Rank %d ncclSendRecvKernel - runSend: copy to self %p->%p count %lld\n", ncclShmem.comm.rank, buff, recvBuff, count);
+      }
+
       if (buff != recvBuff) {
         reduceCopy<COLL_UNROLL, RedOp, T, 0,1,1, 0,1,1, /*PreOpSrcs=*/0>
           (tid, nthreads, 0, nullptr, false, 1, &buff, 1, &recvBuff, count);
+      }
+      if (tid == 0) {
+        printf("Rank %d ncclSendRecvKernel - runSend: copy to self done \n", ncclShmem.comm.rank, buff, recvBuff, count);
       }
     } else {
       int chunkSize = args->chunkSize/sizeof(T);
@@ -52,6 +60,10 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
         prims.directRecv(offset, nelem);
         offset += nelem;
       } while(offset < count);
+    } else {
+      if (tid == 0) {
+        printf("Rank %d ncclSendRecvKernel - runRecv: copy to self, do nothing\n", ncclShmem.comm.rank);
+      }
     }
   }
 
@@ -60,6 +72,9 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
     int ngroups = args->ngroups;
     int tid = threadIdx.x;
     int wid = tid / WARP_SIZE;
+    if (tid == 0) {
+      printf("ncclSendRecvKernel: started\n");
+    }
     // This has to work even for groups of 2.5 warps (which is 8 groups, and means 3
     // warps for send, 2 warps for recv).
     // warpStarts were rounded thanks to int division, but for group number we need to round the other way around
@@ -87,6 +102,9 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
       } else {
         runSend<ProtoSimple<1,1>>(tid, nthreads, group, args);
       }
+    }
+    if (tid == 0) {
+      printf("ncclSendRecvKernel: finished\n");
     }
   }
 };

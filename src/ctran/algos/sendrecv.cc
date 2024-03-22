@@ -48,6 +48,7 @@ static ncclResult_t sendRecvImpl(
     size_t sendSize = op->send.count * ncclTypeSize(op->send.datatype);
     bool localReg = false;
 
+    INFO(NCCL_COLL, "==== ctranSendRecvImpl: sendOpGroup[%d]. sendbuff=%p sendSize %ld", i, op->send.sendbuff, sendSize);
     NCCLCHECKGOTO(
         comm->ctran->mapper->searchRegHandle(
             op->send.sendbuff, sendSize, &sendMemHdl[i], &localReg),
@@ -74,6 +75,7 @@ static ncclResult_t sendRecvImpl(
     size_t recvSize = op->recv.count * ncclTypeSize(op->recv.datatype);
     bool localReg = false;
 
+    INFO(NCCL_COLL, "==== ctranSendRecvImpl: recvOpGroup[%d]. sendbuff=%p sendSize %ld", i, op->recv.recvbuff, recvSize);
     NCCLCHECKGOTO(
         comm->ctran->mapper->searchRegHandle(
             op->recv.recvbuff, recvSize, &recvMemHdl[i], &localReg),
@@ -240,8 +242,10 @@ ncclResult_t ctranGroupEndHook(void) {
       if (op->comm == comm && op->stream == stream) {
         toSubmit.push_back(std::unique_ptr<struct OpElem>(op));
         if (op->type == OpElem::opType::SEND) {
+          INFO(NCCL_COLL, "==== ctranGroupEndHook: submit ctranSend peer %d sendbuff %p count %ld", op->send.peerRank, op->send.sendbuff, op->send.count);
           hasSend = true;
         } else if (op->type == OpElem::opType::RECV) {
+          INFO(NCCL_COLL, "==== ctranGroupEndHook: submit ctranRecv peer %d recvbuff %p count %ld", op->recv.peerRank, op->recv.recvbuff, op->recv.count);
           hasRecv = true;
         }
       } else {
