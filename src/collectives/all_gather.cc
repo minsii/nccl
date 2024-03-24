@@ -30,7 +30,7 @@ ncclResult_t ncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcoun
   bool directSend = (comm->localRanks == 1) && (rankOffset <= NCCL_ALLGATHER_DIRECT_CUTOFF);
 
   // CTRAN allgather: only support inter-node now
-  if (ctranInitialized(comm) && comm->localRanks == 1 && nRanks > 1 && rankOffset > getpagesize()) {
+  if (ctranInitialized(comm) && comm->localRanks == 1 && nRanks > 1) {
     if (NCCL_ALLGATHER_ALGO == NCCL_ALLGATHER_ALGO::ctdirect) {
       return ctranAllGatherDirect(sendbuff, recvbuff, sendcount, datatype, comm, stream);
     } else if (NCCL_ALLGATHER_ALGO == NCCL_ALLGATHER_ALGO::ctring) {
@@ -40,7 +40,9 @@ ncclResult_t ncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcoun
     }
   }
 
-  if (directSend) {
+  // FIXME: do not run send/recv based direct if ctran sendrecv is enabled.
+  // It can cause cuda error and need to be fixed.
+  if (directSend && NCCL_SENDRECV_ALGO != NCCL_SENDRECV_ALGO::ctran) {
     if (sendcount == 0) return ncclSuccess;
 
     NCCLCHECK(ncclGroupStart());
