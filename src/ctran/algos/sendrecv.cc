@@ -273,6 +273,7 @@ ncclResult_t ctranGroupEndHook(void) {
           reinterpret_cast<void*>(ncclKernelRecv)));
     }
 
+    comm->opCount++;
     toSubmit.clear();
     CtranOpGroup = std::move(pending);
   }

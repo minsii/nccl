@@ -54,6 +54,8 @@
 === END_NCCL_CVAR_INFO_BLOCK ===
 */
 
+extern __thread int ncclGroupDepth;
+
 #define CTRAN_COLL_INFO(                                                                                                                     \
     algoStr, sendbuff, recvbuff, count, datatype, peer, comm, stream)                                                                        \
   do {                                                                                                                                       \
@@ -72,7 +74,10 @@
         comm->nRanks,                                                                                                                        \
         comm->localRanks,                                                                                                                    \
         stream);                                                                                                                             \
-    comm->opCount++;                                                                                                                         \
+    /* Increase opCount for grouped ops at ctranGroupEndHook */                                                                              \
+    if (ncclGroupDepth == 0) {                                                                                                               \
+      comm->opCount++;                                                                                                                       \
+    }                                                                                                                                        \
   } while (0)
 
 class Ctran {
