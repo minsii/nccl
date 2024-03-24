@@ -5,9 +5,10 @@
 #include <iostream>
 #include <new>
 #include <stdexcept>
-#include "ExtChecks.h"
+#include <unordered_map>
 #include "CtranGpe.h"
 #include "CtranGpeKernel.h"
+#include "ExtChecks.h"
 #include "checks.h"
 #include "nccl_cvars.h"
 
@@ -22,6 +23,16 @@
      Each p2p element is allocated from page-locked memory on the host.
 === END_NCCL_CVAR_INFO_BLOCK ===
 */
+
+static std::unordered_map<KernelConfig::KernelType, const std::string>
+    kernelTypeToName = {
+        {KernelConfig::KernelType::ALLGATHER, "AllGather"},
+        {KernelConfig::KernelType::SEND, "Send"},
+        {KernelConfig::KernelType::RECV, "Recv"},
+        {KernelConfig::KernelType::SENDRECV, "SendRecv"},
+        {KernelConfig::KernelType::ALLTOALL, "AllToAll"},
+        {KernelConfig::KernelType::ALLTOALLV, "AllToAllv"},
+};
 
 CtranGpe::Impl::Impl() {
   CUDACHECKTHROW(
@@ -73,6 +84,13 @@ ncclResult_t CtranGpe::Impl::submit(
   // operations on this stream have completed
   dim3 grid = {kernelConfig.numBlocks, 1, 1};
   dim3 blocks = {kernelConfig.numThreads, 1, 1};
+
+  if (kernelConfig.args.devState_d == nullptr) {
+    WARN(
+        "NCCL internally passed invalid devState_d (nullptr) to kernel %s",
+        kernelTypeToName[kernelConfig.type].c_str());
+    return ncclInternalError;
+  }
 
   // Specify collective arguments
   kernelArgs.push_back((void*)&kernelConfig.args.devState_d);

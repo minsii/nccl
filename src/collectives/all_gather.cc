@@ -42,7 +42,8 @@ ncclResult_t ncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcoun
 
   // FIXME: do not run send/recv based direct if ctran sendrecv is enabled.
   // It can cause cuda error and need to be fixed.
-  if (directSend && NCCL_SENDRECV_ALGO != NCCL_SENDRECV_ALGO::ctran) {
+  //  && NCCL_SENDRECV_ALGO != NCCL_SENDRECV_ALGO::ctran
+  if (directSend) {
     if (sendcount == 0) return ncclSuccess;
 
     NCCLCHECK(ncclGroupStart());

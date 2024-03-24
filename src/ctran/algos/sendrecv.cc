@@ -178,7 +178,8 @@ ncclResult_t ctranSend(
     int peer,
     ncclComm_t comm,
     cudaStream_t stream) {
-  CTRAN_COLL_INFO("CtranSend", sendbuff, nullptr, count, datatype, peer, comm, stream);
+  CTRAN_COLL_INFO(
+      "CtranSend", sendbuff, nullptr, count, datatype, peer, comm, stream);
 
   ncclResult_t res = ncclSuccess;
   struct OpElem* op;
@@ -201,7 +202,8 @@ ncclResult_t ctranRecv(
     int peer,
     ncclComm_t comm,
     cudaStream_t stream) {
-  CTRAN_COLL_INFO("CtranRecv", nullptr, recvbuff, count, datatype, peer, comm, stream);
+  CTRAN_COLL_INFO(
+      "CtranRecv", nullptr, recvbuff, count, datatype, peer, comm, stream);
 
   ncclResult_t res = ncclSuccess;
   struct OpElem* op;
@@ -215,6 +217,14 @@ ncclResult_t ctranRecv(
   CtranOpGroup.push_back(op);
 
   return res;
+}
+
+static inline void setSendRecvKernelArgs(
+    std::vector<std::unique_ptr<struct OpElem>>& opGroup,
+    CtranAlgoDeviceState* devState_d,
+    CtranKernelArgs* args) {
+  // opGroup is unused for now as we don't support NVL path yet.
+  args->devState_d = devState_d;
 }
 
 ncclResult_t ctranGroupEndHook(void) {
@@ -231,6 +241,7 @@ ncclResult_t ctranGroupEndHook(void) {
       break;
     }
 
+    // submit ops with the same comm and stream in a single batch
     comm = CtranOpGroup.front()->comm;
     stream = CtranOpGroup.front()->stream;
     while (!CtranOpGroup.empty()) {
@@ -245,13 +256,16 @@ ncclResult_t ctranGroupEndHook(void) {
           hasRecv = true;
         }
       } else {
+        // if not belong to this batch, put back to pending queue and handled in
+        // next batch
         pending.push_back(op);
       }
     }
 
     if (hasSend && hasRecv) {
-      auto config =
-          KernelConfig(KernelConfig::KernelType::SENDRECV, stream);
+      auto config = KernelConfig(KernelConfig::KernelType::SENDRECV, stream);
+      setSendRecvKernelArgs(
+          toSubmit, comm->ctran->algo->devState_d, &config.args);
       NCCLCHECK(comm->ctran->gpe->submit(
           std::move(toSubmit),
           sendRecvImpl,
@@ -259,6 +273,8 @@ ncclResult_t ctranGroupEndHook(void) {
           reinterpret_cast<void*>(ncclKernelSendRecv)));
     } else if (hasSend) {
       auto config = KernelConfig(KernelConfig::KernelType::SEND, stream);
+      setSendRecvKernelArgs(
+          toSubmit, comm->ctran->algo->devState_d, &config.args);
       NCCLCHECK(comm->ctran->gpe->submit(
           std::move(toSubmit),
           sendRecvImpl,
@@ -266,6 +282,8 @@ ncclResult_t ctranGroupEndHook(void) {
           reinterpret_cast<void*>(ncclKernelSend)));
     } else if (hasRecv) {
       auto config = KernelConfig(KernelConfig::KernelType::RECV, stream);
+      setSendRecvKernelArgs(
+          toSubmit, comm->ctran->algo->devState_d, &config.args);
       NCCLCHECK(comm->ctran->gpe->submit(
           std::move(toSubmit),
           sendRecvImpl,
@@ -275,6 +293,8 @@ ncclResult_t ctranGroupEndHook(void) {
 
     comm->opCount++;
     toSubmit.clear();
+
+    // handle next batch
     CtranOpGroup = std::move(pending);
   }
 
