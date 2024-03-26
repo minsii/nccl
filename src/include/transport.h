@@ -11,6 +11,7 @@
 #include "graph.h"
 #include "nvmlwrap.h"
 #include "core.h"
+#include "socket.h"
 
 #define NTRANSPORTS 4
 #define TRANSPORT_P2P 0
@@ -43,6 +44,8 @@ struct ncclPeerInfo {
   int64_t busId;
   struct ncclComm* comm;
   int cudaCompCap;
+  pid_t pid;
+  char hostname[kMaxHostNameLen+1];
 };
 
 #define CONNECT_SIZE 128
