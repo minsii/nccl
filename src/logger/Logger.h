@@ -13,8 +13,15 @@
 #include <string>
 #include <thread>
 
+// Friend class for testing. This class is used to access the internal status of
+// NcclLogger.
+class NcclLoggerChecker;
+
 class NcclLogger {
  public:
+  // Friend class for testing
+  friend class NcclLoggerChecker;
+
   static void init(FILE* ncclDebugFile);
 
   static void log(const std::string& msg, FILE* ncclDebugFile) noexcept;
@@ -31,11 +38,6 @@ class NcclLogger {
 
   NcclLogger(FILE*);
 
-  // Ideally ncclDebugInit (the only function that is supposed to call NcclLogger::init)
-  // is already protected to ensure it can only be called once, so we don't need to do
-  // it ourselves. But just trying to be super confident that we will never initialize
-  // the singleton twice.
-  static std::atomic_flag singletonInitialized_;
   static std::unique_ptr<NcclLogger> singleton_;
 
   std::thread loggerThread_;

@@ -7,7 +7,7 @@
 #include "core.h"
 #include "nccl_net.h"
 #include "nccl_cvars.h"
-#include "logger.h"
+#include "Logger.h"
 
 #include <debug.h>
 #include <stdlib.h>

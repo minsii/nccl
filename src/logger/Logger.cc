@@ -1,6 +1,6 @@
 // (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
-#include "logger.h"
+#include "Logger.h"
 #include "nccl_cvars.h"
 
 #include <stdexcept>
@@ -21,9 +21,7 @@
 === END_NCCL_CVAR_INFO_BLOCK ===
 */
 
-
 // Initialize static memeber for NcclLogger
-std::atomic_flag NcclLogger::singletonInitialized_ = ATOMIC_FLAG_INIT;
 std::unique_ptr<NcclLogger> NcclLogger::singleton_{};
 
 void NcclLogger::log(const std::string& msg, FILE* ncclDebugFile) noexcept {
@@ -31,7 +29,8 @@ void NcclLogger::log(const std::string& msg, FILE* ncclDebugFile) noexcept {
   // 1. NCCL_LOGGER_MODE is not async.
   // 2. NCCL_LOGGER_MODE is async but singleton_ haven't initialized.
   // 3. We are exiting the program and singleton_ has already been destroyed.
-  // In all three cases, we should not init singleton and write to the file directly.
+  // In all three cases, we should not init singleton and write to the file
+  // directly.
   if (singleton_ != nullptr) {
     singleton_->enqueueLog(msg);
   } else {
@@ -40,8 +39,7 @@ void NcclLogger::log(const std::string& msg, FILE* ncclDebugFile) noexcept {
 }
 
 void NcclLogger::init(FILE* ncclDebugFile) {
-  if (NCCL_LOGGER_MODE == NCCL_LOGGER_MODE::async &&
-        !singletonInitialized_.test_and_set()) {
+  if (NCCL_LOGGER_MODE == NCCL_LOGGER_MODE::async) {
     singleton_ = std::unique_ptr<NcclLogger>(new NcclLogger(ncclDebugFile));
   }
 }
@@ -81,7 +79,7 @@ NcclLogger::~NcclLogger() {
   }
 }
 
-void NcclLogger::enqueueLog(const std::string& msg) noexcept{
+void NcclLogger::enqueueLog(const std::string& msg) noexcept {
   try {
     {
       std::lock_guard<std::mutex> lock(mutex_);
