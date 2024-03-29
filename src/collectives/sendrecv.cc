@@ -36,6 +36,8 @@ ncclResult_t ncclSend(const void* sendbuff, size_t count, ncclDataType_t datatyp
     return ret;
   }
 
+  ctranGroupTrackDefaultOp(comm);
+
   NCCLCHECK(ncclDataExport(
       sendbuff, count * ncclTypeSize(datatype), stream, comm, peer, datatype));
 
@@ -67,6 +69,8 @@ ncclResult_t ncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, int
     NCCLCHECK(ncclGroupEnd());
     return ret;
   }
+
+  ctranGroupTrackDefaultOp(comm);
 
   NvtxParamsSendRecv payload{count * ncclTypeSize(datatype), peer};
   NVTX3_FUNC_WITH_PARAMS(Recv, SendRecvSchema, payload)
