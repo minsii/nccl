@@ -1021,8 +1021,9 @@ static ncclResult_t sendProxyProgress(struct ncclProxyState* proxyState, struct 
             }
           }
           if (ready) {
-            // Profiler will not update if already in ncclProxyProfileRemFIFOWait state
+            // Profiler and tracer will not update if already in REM_FIFO_WAIT state
             ncclProfilingRecord(args, s, sub->transmitted, ncclProxyProfileRemFIFOWait);
+            PROXY_TRACE_CALL(proxyState, proxyState->trace->recordSendProgress(args, s, sub->transmitted + args->sliceSteps, ProxyOpStepStatus::REM_FIFO_WAIT));
 
             // Data is ready, try to send.
 #ifdef ENABLE_NTRACE

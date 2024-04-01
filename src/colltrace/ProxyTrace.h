@@ -25,6 +25,7 @@ struct ProxyTraceCollInfo {
 
 enum ProxyOpStepStatus {
   POSTED,
+  REM_FIFO_WAIT,
   RECEIVED,
   TRANSMITTED,
   DONE,

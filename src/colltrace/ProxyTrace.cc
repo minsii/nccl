@@ -36,6 +36,7 @@
 
 static std::map<ProxyOpStepStatus, std::string> proxySendStepStatusStrMap = {
     {ProxyOpStepStatus::POSTED, "POSTED"},
+    {ProxyOpStepStatus::REM_FIFO_WAIT, "REM_FIFO_WAIT"},
     {ProxyOpStepStatus::TRANSMITTED, "TRANSMITTED"},
     {ProxyOpStepStatus::DONE, "DONE"},
 };
@@ -262,10 +263,17 @@ inline ncclResult_t ProxyTrace::updateTraceEntryStep(
   }
 
   auto& entry = activeOps_[commHash][opCount][proxyOpId];
+  if (status == ProxyOpStepStatus::REM_FIFO_WAIT &&
+      entry->stepRecords[status].step == step) {
+    // Skip if a step is already in REM_FIFO_WAIT status, since we want to
+    // record the first time when the step is updated to REM_FIFO_WAIT
+    return ncclSuccess;
+  }
+
   entry->stepRecords[status].step = step;
   entry->stepRecords[status].ts = std::chrono::high_resolution_clock::now();
   entry->transSize = sub->traceArgs.transSize;
-  return ncclSuccess;
+    return ncclSuccess;
 }
 
 ncclResult_t ProxyTrace::startSend(struct ncclProxyArgs* args) {
@@ -348,6 +356,7 @@ static std::vector<std::string> entryKeys = {
     "startTs",
     "doneTs",
     "POSTED",
+    "REM_FIFO_WAIT",
     "RECEIVED",
     "TRANSMITTED",
     "DONE"};
