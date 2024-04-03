@@ -2224,7 +2224,7 @@ ncclResult_t ncclCommDestroy(ncclComm_t comm) {
   NVTX3_FUNC_WITH_PARAMS(CommDestroy, CommInitRankSchema, payload)
 
   int64_t busId = comm->busId;
-  TRACE(NCCL_INIT, "comm %p rank %d nRanks %d cudaDev %d busId %lx", comm, rank, nranks, cudaDev, busId);
+  INFO(NCCL_INIT, "comm %p commHash %lx rank %d nRanks %d cudaDev %d busId %lx - Destroy START", comm, comm->commHash, rank, nranks, cudaDev, busId);
   // Try and prevent a double free of the comm struct (user error)
   if (comm->rank == -1 || comm->nRanks == -1 || comm->cudaDev == -1 || comm->busId == -1) {
     WARN("comm %p has already been destroyed", comm);
@@ -2240,7 +2240,7 @@ ncclResult_t ncclCommDestroy(ncclComm_t comm) {
   NCCLCHECK(ncclCommEnsureReady(comm));
 
   NCCLCHECK(commReclaim(comm));
-  INFO(NCCL_INIT,"comm %p rank %d nranks %d cudaDev %d busId %lx - Destroy COMPLETE", comm, rank, nranks, cudaDev, busId);
+  INFO(NCCL_INIT,"comm %p commHash %lx rank %d nranks %d cudaDev %d busId %lx - Destroy COMPLETE", comm, comm->commHash, rank, nranks, cudaDev, busId);
 
   return ncclSuccess;
 }
@@ -2259,7 +2259,7 @@ ncclResult_t ncclCommAbort(ncclComm_t comm) {
   NVTX3_FUNC_WITH_PARAMS(CommAbort, CommInitRankSchema, payload)
 
   int64_t busId = comm->busId;
-  TRACE(NCCL_INIT, "comm %p rank %d nRanks %d cudaDev %d busId %lx", comm, rank, nranks, cudaDev, busId);
+  INFO(NCCL_INIT, "comm %p commHash %lx rank %d nRanks %d cudaDev %d busId %lx - Abort START", comm, comm->commHash, rank, nranks, cudaDev, busId);
 
   // Ask anything that might still be running on the device to quit
   childAbortFlag = __atomic_load_n(&comm->childAbortFlag, __ATOMIC_ACQUIRE);
@@ -2277,7 +2277,7 @@ ncclResult_t ncclCommAbort(ncclComm_t comm) {
   ncclCommEnsureReady(comm);
 
   (void) commReclaim(comm);
-  INFO(NCCL_INIT,"comm %p rank %d nranks %d cudaDev %d busId %lx - Abort COMPLETE", comm, rank, nranks, cudaDev, busId);
+  INFO(NCCL_INIT,"comm %p commHash %lx rank %d nranks %d cudaDev %d busId %lx - Abort COMPLETE", comm, comm->commHash, rank, nranks, cudaDev, busId);
 
   return ncclSuccess;
 }

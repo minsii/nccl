@@ -155,17 +155,6 @@ CtranIbSingleton::CtranIbSingleton(void) {
 }
 
 CtranIbSingleton::~CtranIbSingleton() {
-  {
-    std::lock_guard<std::mutex> guard(this->commsMutex_);
-    if (this->comms_.size()) {
-      for (auto& it : this->comms_) {
-        WARN(
-            "CTRAN-IB: communicator %p are still alive when CtranIbSingleton is destroyed.",
-            it);
-      }
-    }
-  }
-
   if (NCCL_CTRAN_IB_TRAFFIC_PROFILNG) {
     std::lock_guard<std::mutex> guard(this->trafficRecordMutex_);
     for (auto& it : this->trafficPerDevice_) {
@@ -184,13 +173,30 @@ CtranIbSingleton::~CtranIbSingleton() {
     }
   }
 
+  {
+    std::lock_guard<std::mutex> guard(this->commsMutex_);
+    if (this->comms_.size()) {
+      auto i = 0;
+      for (auto& it : this->comms_) {
+        WARN(
+            "CTRAN-IB: communicator %p are still alive when CtranIbSingleton is destroyed.",
+            it);
+      }
+    }
+  }
+
+  INFO(NCCL_INIT, "CTRAN-IB: releasing %ld PDs", this->pds.size());
   for (auto pd : this->pds) {
     NCCLCHECKIGNORE(wrap_ibv_dealloc_pd(pd));
   }
+  INFO(NCCL_INIT, "CTRAN-IB: released all PDs");
 
+  INFO(NCCL_INIT, "CTRAN-IB: releasing %ld contexts", this->contexts.size());
   for (auto context : this->contexts) {
     NCCLCHECKIGNORE(wrap_ibv_close_device(context));
   }
+
+  INFO(NCCL_INIT, "CTRAN-IB: All network resources are released.");
 
   // Dot not throw exception in destructor to avoid early termination in stack
   // unwind. See discussion in
